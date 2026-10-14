@@ -1,0 +1,26 @@
+[Unit]
+Description=DJQ multiplayer board game
+After=network.target
+
+[Service]
+Type=simple
+User=djq
+Group=djq
+WorkingDirectory=/opt/djq
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=3000
+EnvironmentFile=-/etc/djq.env
+ExecStart=/usr/bin/node /opt/djq/server/index.mjs
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

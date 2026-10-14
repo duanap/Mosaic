@@ -1,0 +1,31 @@
+{
+  "version": "1.0.0",
+  "date": "2026-10-14",
+  "node": "22.16.0",
+  "native": {
+    "command": "npm run verify",
+    "passed": 38,
+    "failed": 0,
+    "syntax_and_import_check": true,
+    "build": true
+  },
+  "browser": {
+    "command": "DJQ_BROWSER_BRIDGE=1 python tests/browser_smoke.py",
+    "passed": 9,
+    "failed": 0,
+    "mode": "Chromium about:blank with local sources and real HTTP/SSE bridge; browser storage emulated"
+  },
+  "distribution_smoke": {
+    "health": true,
+    "public_assets": 7,
+    "create_room": true
+  },
+  "review": "Author self-review; no independent reviewer",
+  "not_verified": [
+    "Direct browser-origin navigation and native storage",
+    "Browser-enforced CSP on real origin",
+    "Production TLS/reverse proxy/CDN",
+    "Large-scale load",
+    "Cloud deployment"
+  ]
+}
