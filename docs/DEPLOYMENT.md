@@ -5,8 +5,8 @@
 Install Node.js 22 or newer. The application has zero npm runtime and development dependencies; `npm start` works directly after cloning. An npm install is optional, not required.
 
 ```sh
-git clone https://github.com/duanap/djq.git
-cd djq
+git clone https://github.com/duanap/Mosaic.git
+cd Mosaic
 npm start
 ```
 
@@ -70,7 +70,7 @@ Static assets are served with no-cache (revalidation), and API responses with no
 
 ## Acceptance on your actual hostname
 
-Check /api/health, create a room, join from a second browser/device, ready both, make a move, refresh one tab and confirm recovery, wait for a timed move, resign, and start a rematch. Repeat a three-player room to verify neutral green. Inspect the event stream for active updates through the proxy and check that tokens do not appear in proxy URLs/logs. If using a CDN, repeat with it enabled.
+Check /api/health, create a room, join from a second browser/device, ready both, make a move, refresh one tab and confirm recovery, then close that tab and use the home page's recovery button in a new tab in the same browser profile. Verify a new tab does not automatically take over an existing seat. Recover before the server reclaims the disconnected seat/room. Wait for a timed move, resign, and start a rematch. Repeat a three-player room to verify neutral green. Inspect the event stream for active updates through the proxy and check that tokens do not appear in proxy URLs/logs. If using a CDN, repeat with it enabled.
 
 ## Boundaries
 

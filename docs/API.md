@@ -14,7 +14,11 @@ All HTTP API responses are JSON except the event stream. Errors are `{ "error": 
 | POST | /api/rooms/:code/commands | Bearer | Apply command and return snapshot |
 | GET | /api/rooms/:code/replay | Bearer | Validated action history export |
 
-Create/join returns `{token, seat, room}`. Persist the token only in that browser tab's sessionStorage. It is never in a URL, room snapshot, shared link, replay export, or server log. A token controls a seat, not an account; losing it does not grant recovery by nickname.
+Create/join returns `{token, seat, room}`. The current tab stores its selected seat in sessionStorage; localStorage keeps up to 20 recovery records for at most eight hours each, allowing explicit recovery after closing a tab/browser in the same browser profile and origin. Existing tab credentials are backed up on first use. New tabs display recovery buttons rather than automatically taking over another tab's connection. Multiple seats may be saved separately. Tokens are never rendered in the UI or placed in a URL, room snapshot, shared link, replay export, or server log. A token controls a seat, not an account; losing it does not grant recovery by nickname.
+
+Voluntary leave and UNAUTHORIZED/ROOM_NOT_FOUND remove only the affected recovery record. Transient network failures preserve it; SESSION_REPLACED clears the old tab's selection but preserves the shared recovery record. Storage availability does not affect the ability to play. Recovery still requires a live server-side seat: waiting disconnected seats expire after 120 seconds, rooms without connections expire 15 minutes after their last human activity, and all rooms expire after eight hours or a server restart. Clearing site data or switching browser/device loses recovery access.
+
+On HTTPS/localhost, Web Locks protect automatic reconnection from taking over a seat whose tab credentials were copied (for example by duplicating a tab). Explicit recovery may take over that lock and the server-side stream. The old tab disconnects when its lock is taken, even if the new page's subsequent connection fails; shared recovery credentials remain available for retry. Without Web Locks, automatic reconnection checks the seat's connection state first and requests manual recovery if it is still connected; a delayed disconnect may therefore require clicking the recovery button after a refresh.
 
 ## Commands
 

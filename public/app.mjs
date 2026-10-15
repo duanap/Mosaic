@@ -1,6 +1,6 @@
 import { PIECES, COLORS, CORNERS, transform, newGame, validateMove, applyMove, findMove,
   controller, scores, resign, replay, exportReplay, pieceSize, ownedColors } from '/shared/rules.mjs';
-import { RoomClient, savedSession } from '/network.mjs';
+import { RoomClient, savedSession, savedSessions } from '/network.mjs';
 import { t } from '/i18n.mjs';
 
 const $=selector=>document.querySelector(selector);
@@ -11,7 +11,7 @@ const LOCAL='djq-local-v1';
 const ui={view:'home',mode:'local',count:4,scoring:'bonus',seconds:90,name:read('djq-name',`${t('player')}${Math.floor(Math.random()*900)+100}`),
   joinCode:new URLSearchParams(location.search).get('room')?.toUpperCase().slice(0,6)??'',
   game:null,room:null,names:[],selected:null,orientation:0,cursor:null,showCorners:false,pending:false,connected:false,
-  replayRecord:null,replayStep:0,clockOffset:0,theme:read('djq-theme',matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')};
+  replayRecord:null,replayStep:0,clockOffset:0,recoveries:[],theme:read('djq-theme',matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')};
 if(!['dark','light'].includes(ui.theme)) ui.theme='light';
 document.documentElement.dataset.theme=ui.theme;
 const icons={
@@ -42,7 +42,7 @@ function captureOptions() {
 }
 function header() {
   return `<header class="site-header"><button id="home-button" class="brand" aria-label="${t('home')}"><span class="brand-mark"><i></i><i></i><i></i><i></i></span><strong>${t('title')}</strong><span class="brand-label">DJQ</span></button>
-  <nav><button id="rules-button" class="text-button">${icon('help')}<span>${t('rules')}</span></button><a class="github-link" href="https://github.com/duanap/djq" target="_blank" rel="noopener noreferrer">GitHub ${icon('arrow')}</a><button id="theme-toggle" class="icon-button" aria-label="${t('theme')}">${icon(ui.theme==='dark'?'sun':'moon')}</button></nav></header>`;
+  <nav><button id="rules-button" class="text-button">${icon('help')}<span>${t('rules')}</span></button><a class="github-link" href="https://github.com/duanap/Mosaic" target="_blank" rel="noopener noreferrer">GitHub ${icon('arrow')}</a><button id="theme-toggle" class="icon-button" aria-label="${t('theme')}">${icon(ui.theme==='dark'?'sun':'moon')}</button></nav></header>`;
 }
 function miniPiece(id,orientation=0) {
   const cells=transform(id,orientation),w=Math.max(...cells.map(c=>c[0]))+1,h=Math.max(...cells.map(c=>c[1]))+1;
@@ -57,13 +57,18 @@ function boardSVG(game,interactive=true) {
   return `<svg ${interactive?`id="board" tabindex="0" role="application" aria-label="20 x 20 ${t('title')}. ${t('shortcut')}"`:'aria-hidden="true"'} class="board-svg" viewBox="0 0 600 600"><rect class="board-base" width="600" height="600"/><path class="grid-lines" d="${grid}"/>${tiles}${marks}${highlight}${interactive?'<g id="frontiers"></g><g id="preview" pointer-events="none"></g>':''}</svg>`;
 }
 const demo=newGame(4);for(let n=0;n<32;n++) applyMove(demo,findMove(demo));
+function recoveryView() {
+  ui.recoveries=savedSessions();
+  if(!ui.recoveries.length) return '';
+  return `<section class="recovery-section" aria-labelledby="recovery-title"><h2 id="recovery-title">${t('recoverSeat')}</h2><p>${t('recoverHelp')}</p><div class="recovery-actions">${ui.recoveries.map((s,i)=>`<button class="button secondary" data-recover="${i}"${busy()}>${icon('back')}<span>${escape(s.name||t('player'))} / ${s.code}${s.seat===null?'':` / ${t('seat')} ${s.seat+1}`}</span></button>`).join('')}</div></section>`;
+}
 function homeView() {
   return `<main class="home-shell"><section class="hero"><div class="hero-copy"><p class="eyebrow"><span class="live-dot"></span> SMALL BOARD. BIG POSSIBILITIES.</p><h1>${t('hero')}</h1><p class="lead">${t('intro')}</p><div class="quick-rules">${[1,2,3].map(n=>`<span><b>0${n}</b>${t('tip'+n)}</span>`).join('')}</div></div>
   <div class="hero-art"><div class="art-orbit"></div><div class="hero-board-wrap">${boardSVG(demo,false)}</div><div class="art-tag"><span class="tag-block">21</span><span>${t('tiles')} / ${t('perColor')}<small>89 LITTLE SQUARES</small></span></div><span class="art-caption">A NEW ANGLE ON EVERY MOVE.</span></div></section>
   <section class="play-section"><div class="section-heading"><div><p class="eyebrow">01 / LET'S PLAY</p><h2>${t('chooseMode')}</h2></div><div class="mode-switch" aria-label="${t('chooseMode')}">${[2,3,4].map(n=>`<button id="mode-${n}" data-count="${n}" class="${ui.count===n?'selected':''}" aria-pressed="${ui.count===n}"><strong>${n}<small>${t('people')}</small></strong><span>${t('mode'+n)}</span></button>`).join('')}</div></div>
   <div class="play-cards"><article class="play-card local-card"><div class="card-top"><span class="card-icon">${icon('users')}</span><span class="eyebrow">SAME SCREEN</span></div><h3>${t('localTitle')}</h3><p>${t('localDesc')}</p><label class="inline-field">${t('scoring')}<select id="scoring"><option value="bonus" ${ui.scoring==='bonus'?'selected':''}>${t('bonus')} +15 / +20</option><option value="simple" ${ui.scoring==='simple'?'selected':''}>${t('simple')}</option></select></label><button id="local-start" class="button primary wide">${t('localStart')}${icon('arrow')}</button>${read(LOCAL)?`<button id="resume-local" class="text-button resume">${t('resume')}${icon('back')}</button>`:`<p class="fine">${t('saved')}</p>`}</article>
   <article class="play-card online-card"><div class="card-top"><span class="card-icon">${icon('link')}</span><span class="eyebrow">PLAY TOGETHER</span></div><h3>${t('onlineTitle')}</h3><p>${t('onlineDesc')}</p><div class="online-fields"><label>${t('name')}<input id="player-name" maxlength="20" autocomplete="nickname" value="${escape(ui.name)}"></label><label>${t('turnLimit')}<select id="turn-seconds">${[30,60,90,120].map(n=>`<option value="${n}" ${ui.seconds===n?'selected':''}>${n} ${t('seconds')}</option>`).join('')}</select></label></div><div class="online-actions"><button id="create-room" class="button secondary"${busy()}>${t('create')}${icon('arrow')}</button><div class="join-field"><input id="room-code-input" maxlength="6" autocomplete="off" aria-label="${t('code')}" placeholder="${t('code')}" value="${escape(ui.joinCode)}"><button id="join-room" class="text-button"${busy()}>${t('join')}</button></div></div></article></div></section>
-  <footer class="home-footer"><span>DJQ / v1.0.0 <i></i>${t('footer')}</span><button id="import-replay" class="text-button">${t('import')}${icon('arrow')}</button></footer></main>`;
+  ${recoveryView()}<footer class="home-footer"><span>DJQ / v1.0.0 <i></i>${t('footer')}</span><button id="import-replay" class="text-button">${t('import')}${icon('arrow')}</button></footer></main>`;
 }
 function connectionLabel() {return `<span id="connection" class="connection ${ui.connected?'connected':''}"><i></i>${t(ui.connected?'connected':'reconnecting')}</span>`;}
 function lobbyView() {
@@ -169,8 +174,20 @@ async function goHome() {
   }
   saveLocal();ui.view='home';ui.mode='local';ui.room=null;ui.game=null;ui.replayRecord=null;resetSelection();render();window.scrollTo(0,0);
 }
+async function resumeOnline(session,automatic=false) {
+  ui.pending=true;ui.mode='online';render();
+  try {await network.attach(session,{automatic});}
+  catch(error) {
+    network.stop(false);ui.mode='local';ui.room=null;ui.game=null;ui.view='home';resetSelection();throw error;
+  } finally {ui.pending=false;render();}
+}
 async function handleButton(button) {
   const id=button.dataset.action??button.id;
+  if(button.dataset.recover!==undefined) {
+    const session=ui.recoveries[Number(button.dataset.recover)];
+    if(session&&!ui.pending) {captureOptions();await resumeOnline({code:session.code,token:session.token});}
+    return;
+  }
   if(button.dataset.count) {captureOptions();ui.count=Number(button.dataset.count);render();return;}
   if(button.dataset.piece) {if(!canPlay()) return;ui.selected=button.dataset.piece;ui.orientation=0;ui.cursor=null;render();if(matchMedia('(max-width:760px)').matches) $('#board').scrollIntoView({block:'center'});return;}
   if(id==='theme-toggle') {captureOptions();ui.theme=ui.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=ui.theme;write('djq-theme',ui.theme);render();}
@@ -269,8 +286,8 @@ $('#import-file').addEventListener('change',async event=>{
   } catch {toast(t('INVALID_REPLAY'));}
 });
 window.addEventListener('pagehide',()=>network.stop(false));
-window.addEventListener('pageshow',event=>{if(event.persisted&&savedSession()) network.attach(savedSession()).catch(error=>toast(t(error.message)));});
+window.addEventListener('pageshow',event=>{const session=event.persisted?savedSession():null;if(session) resumeOnline(session,true).catch(error=>toast(t(error.message)));});
 setInterval(updateCountdown,1000);
 render();
 const session=savedSession();
-if(session) {ui.mode='online';network.attach(session).catch(error=>{network.stop();ui.mode='local';ui.view='home';render();toast(t(error.message));});}
+if(session) resumeOnline(session,true).catch(error=>toast(t(error.message)));

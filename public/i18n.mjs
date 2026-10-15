@@ -9,6 +9,8 @@ const words = {
  localTitle:'面对面，下一局',localDesc:'在同一台设备上轮流操作，无需登录。',
  localStart:'开始同屏对战',resume:'继续上次对局',
  onlineTitle:'邀请朋友，远程开局',onlineDesc:'创建房间，或用邀请码加入朋友。',
+ recoverSeat:'恢复联机席位',seat:'席位',
+ recoverHelp:'关闭标签页后，可在同一浏览器中恢复原席位。若席位正在其他页面使用，恢复会将连接转到此页。',
  name:'你的昵称',code:'邀请码',create:'创建房间',join:'加入',
  bonus:'奖励计分',simple:'基础计分',scoring:'计分方式',seconds:'秒 / 手',turnLimit:'联机回合',
  import:'导入棋谱',export:'导出棋谱',

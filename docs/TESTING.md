@@ -6,7 +6,11 @@
 
 Important cases: exact 21-piece inventory and 89-cell conservation; unique rotations/reflections; boundary/overlap/edge/corner failures; separate-color ownership; neutral control; scoring and ties; full game termination; independent exhaustive move-search oracle; stale round/revision rejection; private tokens; waiting-seat reclamation; disconnect deadlines; timeout moves; real SSE snapshots; malformed JSON, large bodies and request limits; old stream cleanup isolation.
 
+Seat recovery regressions also cover persistent storage, legacy session migration, multiple saved seats, per-seat cleanup, expired/malformed records, storage denial, transient failures, and preserving shared recovery on stream replacement.
+
 ## Browser suite
+
+For the direct-browser seat recovery suite, make the optional Node `playwright` package and Chromium available, then run `node --test tests/browser_recovery.mjs`. `CHROMIUM_PATH` may point to an installed Chromium/Edge executable; `DJQ_PLAYWRIGHT_MODULE` may point to an existing Playwright package directory. The test starts its own local server on an ephemeral loopback port. It checks actual localStorage/sessionStorage, closing/reopening tabs, restarting the browser process, resuming an active game, explicit recovery without automatic takeover (including copied tab credentials, with and without Web Locks), separate seats in one browser, safe recovery labels, temporary API failures, invalid-room cleanup, the repository link, and mobile layout. It writes `artifacts/browser/recovery-mobile.png` and needs no production server or browser bridge.
 
 With Python Playwright and Chromium available, start the server and run:
 
