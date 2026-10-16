@@ -3,6 +3,9 @@ import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root=fileURLToPath(new URL('../',import.meta.url));
+const manifest=JSON.parse(await readFile(resolve(root,'package.json'),'utf8'));
+const html=await readFile(resolve(root,'public/index.html'),'utf8');
+if(!html.includes(`<meta name="application-version" content="${manifest.version}">`)||!html.includes(`<title>角斗士棋 v${manifest.version}</title>`)) throw Error('Application title/version must match package.json');
 let count=0;
 for(const dir of ['shared','server','public','scripts','tests']) {
   for(const entry of await readdir(resolve(root,dir),{withFileTypes:true})) {

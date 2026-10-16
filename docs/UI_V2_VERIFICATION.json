@@ -7,34 +7,34 @@
     "command": "npm run verify",
     "passed": 69,
     "failed": 0,
-    "modules": 33,
+    "modules": 34,
     "build": true
   },
   "browser": {
     "command": "npm run test:browser",
-    "passed": 30,
+    "passed": 32,
     "failed": 0,
     "engine": "Installed Edge/Chromium headless",
     "mode": "Actual loopback HTTP/SSE, native storage, CSP, module workers and CDP touch",
-    "log": "artifacts/ui-v2-refinement-browser.log"
+    "log": "artifacts/ui-v2-toolbar-browser-final.log"
   },
   "viewports": [
     {
       "width": 1920,
       "height": 1080,
-      "board": 938,
+      "board": 913,
       "threeColumns": true
     },
     {
       "width": 1600,
       "height": 900,
-      "board": 758,
+      "board": 733,
       "threeColumns": true
     },
     {
       "width": 1366,
       "height": 768,
-      "board": 626,
+      "board": 601,
       "threeColumns": true
     },
     {
@@ -52,13 +52,13 @@
     {
       "width": 844,
       "height": 390,
-      "board": 254,
+      "board": 232,
       "threeColumns": false
     },
     {
       "width": 932,
       "height": 430,
-      "board": 294,
+      "board": 272,
       "threeColumns": false
     },
     {
@@ -90,7 +90,12 @@
     "minimal board captions and letter-free color markers",
     "current-color perimeter breathing, no internal seams, removed on commit",
     "static glow for reduced-motion preferences",
-    "single-column transform buttons and header countdown"
+    "single-column transform buttons and header countdown",
+    "Enter confirms after pointer selection and T requests a hint",
+    "disabled confirmation carries validation or waiting feedback",
+    "top navigation history modal receives live SSE changes",
+    "repeated Enter sends one request while a move is pending",
+    "title and brand version match package.json"
   ],
   "unchanged": [
     "shared rules/strategy",
@@ -101,7 +106,8 @@
   "screenshots": [
     "docs/screenshots/ui-v2/desktop-light-midgame.png",
     "docs/screenshots/ui-v2/desktop-dark-midgame.png",
-    "docs/screenshots/ui-v2/phone-landscape-drawer.png"
+    "docs/screenshots/ui-v2/phone-landscape-drawer.png",
+    "docs/screenshots/ui-v2/history-dialog.png"
   ],
   "notVerified": [
     "physical Android/iOS Safari",

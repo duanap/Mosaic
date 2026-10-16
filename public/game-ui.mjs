@@ -1,4 +1,4 @@
-import { transform, pieceSize, COLORS } from '../shared/rules.mjs';
+import { transform } from '../shared/rules.mjs';
 
 /** Only exposed cell edges belong to the preview outline; internal joins never glow. */
 export function previewOutline(cells) {
@@ -20,9 +20,9 @@ export function pieceSVG(id,orientation=0,{tight=false}={}) {
   return `<svg viewBox="${viewBox}" aria-hidden="true"><g transform="translate(${offset})">${cells.map(([x,y])=>`<rect x="${x+.06}" y="${y+.06}" width=".88" height=".88" rx=".12"/>`).join('')}</g></svg>`;
 }
 
-export function selectionMarkup(piece,orientation,color,t) {
+export function selectionMarkup(piece,orientation,color) {
   return `<div id="selected-piece-preview" class="selected-piece-art c${color}">${piece?pieceSVG(piece,orientation,{tight:true}):'<span class="selection-placeholder" aria-hidden="true">＋</span>'}</div>
-    <div id="selected-piece-meta" class="selected-piece-meta">${piece?`<strong>${piece} <small>${pieceSize(piece)} ${t('squares')}</small></strong><span class="c${color}"><i></i>${t(COLORS[color])}${t('colorSuffix')}${orientation>=4?` · ${t('mirrored')}`:''} · ${orientation%4*90}°</span>`:`<strong>${t('noSelection')}</strong><span>${t('selectionHelp')}</span>`}</div>`;
+    <div id="selected-piece-meta" class="selected-piece-meta">${piece?`<strong>${piece}</strong>`:''}</div>`;
 }
 
 let observer;

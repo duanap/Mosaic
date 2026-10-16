@@ -106,7 +106,7 @@ test('local bot play, hint cycling, undo, restore and full-game termination',asy
     const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.goto(`http://127.0.0.1:${app.server.address().port}`);
     await page.locator('#mode-2').click();await page.locator('[data-seat-kind="1"]').selectOption('bot');await page.locator('#local-start').click();
-    await page.locator('#hint').click();await page.waitForFunction(()=>document.querySelector('#preview-status').textContent.includes('方案 1/'));
+    await page.locator('#hint').click();await page.waitForFunction(()=>document.querySelector('#hint-status').textContent.includes('方案 1/'));
     const first=await page.locator('#preview').innerHTML(),piece=await page.locator('.piece.selected').getAttribute('data-piece');
     await page.locator('#hint').click();assert.notEqual(await page.locator('#preview').innerHTML(),first);
     assert.notEqual(await page.locator('.piece.selected').getAttribute('data-piece'),piece);

@@ -326,3 +326,53 @@ body[data-screen="game"] #app {
   .game-shell-v2 .player-state {width:100%}
   .game-shell-v2 .piece-tray {grid-template-columns:repeat(5,minmax(0,1fr))}
 }
+
+/* Compact controls: model-only selection, stacked actions and one feedback button. */
+.brand-label {white-space:nowrap}
+.brand-label small {font:inherit; color:var(--muted)}
+.match-header .brand-label {display:inline; white-space:nowrap}
+.game-shell-v2 .tray-legend {justify-content:center; margin:0 0 14px}
+.selection-preview {position:relative; min-width:0}
+.selection-preview .selected-piece {height:100%; display:flex; flex-direction:column; justify-content:center; padding:24px 10px 12px}
+.selection-preview #clear-selection {position:absolute; top:4px; right:4px; width:26px; height:26px; min-height:26px; border:0; background:transparent; padding:3px}
+.selected-piece-meta {text-align:center; min-height:24px; margin-top:6px}
+.selected-piece-meta strong {font-size:16px; line-height:1.5}
+.game-shell-v2 .selection-tools {padding-top:14px}
+.game-shell-v2 .transform-tools .hint-button {color:var(--accent); border-color:color-mix(in srgb,var(--accent) 35%,var(--line)); background:var(--accent-soft)}
+#hint-sequence {font-size:10px; color:var(--muted); font-variant-numeric:tabular-nums}
+.game-shell-v2 .commit-actions {grid-template-columns:minmax(0,1fr)}
+.game-shell-v2 #confirm-move {width:100%; min-width:0; min-height:48px; height:auto}
+.game-shell-v2 #confirm-move #preview-status {min-width:0; white-space:normal; overflow-wrap:anywhere; line-height:1.5}
+.game-shell-v2 #confirm-move:disabled {opacity:1; color:var(--muted); border-color:var(--line); background:var(--surface-soft)}
+.game-shell-v2 #confirm-move:disabled[data-feedback="invalid"] {color:var(--danger); background:color-mix(in srgb,var(--danger) 6%,var(--surface)); border-color:color-mix(in srgb,var(--danger) 30%,var(--line))}
+.game-shell-v2 .dock-confirm>span {min-width:0; white-space:normal; overflow-wrap:anywhere; line-height:1.25}
+.game-shell-v2:has(> #game-shortcuts) {display:grid; grid-template-rows:minmax(0,1fr) auto; gap:8px}
+.game-shell-v2 > #game-shortcuts {display:block; grid-column:1/-1; margin:0; padding:0 3px; text-align:center; font-size:11px; line-height:1.5; color:var(--muted)}
+#modal-log .move-log {border:0; padding:0; margin:0}
+#modal-log .move-log h3 {display:none}
+#modal-log .move-log ol {gap:0; margin:0}
+#modal-log .move-log li {font-size:13px; padding:12px 0; border-bottom:1px solid var(--line)}
+#modal-log .move-log li>span:last-child {display:flex; flex-wrap:wrap; align-items:center; gap:6px 16px}
+#modal-log .move-log small {font-size:11px; white-space:normal}
+@media (max-width:760px) {
+  .site-header .brand-label {display:inline; font-size:9px; letter-spacing:normal}
+  .game-shell-v2 > #game-shortcuts {font-size:10px; line-height:1.6}
+}
+@media (max-width:760px) and (min-height:561px), (max-width:599px) {
+  .game-shell-v2:has(> #game-shortcuts) {display:block}
+  .game-shell-v2 > #game-shortcuts {margin-top:14px}
+}
+@media (min-width:600px) and (max-height:560px) and (orientation:landscape) {
+  .match-header .brand-label {display:inline; font-size:9px; letter-spacing:normal}
+  .game-shell-v2 > #game-shortcuts {font-size:9px}
+}
+@media (max-width:380px) {
+  .match-header {padding:8px 10px; column-gap:8px}
+  .match-header .brand strong {font-size:16px}
+}
+@media (min-width:931px) and (max-width:1200px) and (min-height:561px) {
+  .match-header {grid-template-columns:220px minmax(0,1fr) auto}
+}
+@media (min-width:761px) and (max-width:930px) and (min-height:561px) {
+  .match-header {grid-template-columns:210px minmax(0,1fr) auto}
+}

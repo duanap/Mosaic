@@ -77,7 +77,7 @@ test('UI 2.0 fits actual games across desktop tablet and phone sizes',async t=>{
         await page.locator('#board').focus();await page.keyboard.press('Escape');
         assert.equal(await page.locator('#preview rect').count(),0);assert.equal(await page.locator('#selected-piece-preview rect').count(),0);
         if(compact) await page.locator('#dock-pieces').click();
-        await page.locator('#hint').click();await page.waitForFunction(()=>document.querySelector('#preview-status').textContent.includes('方案'));
+        await page.locator('#hint').click();await page.waitForFunction(()=>document.querySelector('#hint-status').textContent.includes('方案'));
         if(compact&&await page.locator('#close-pieces').isVisible()) await page.locator('#close-pieces').click();
         await page.locator(width<=760||compact?'[data-action="confirm-move"]':'#confirm-move').click();
         assert.equal(await page.locator('#move-number').innerText(),'1');
@@ -135,9 +135,8 @@ test('UI 2.0 keeps modes, disabled states, replay, drawer focus and rotation cha
       const rotated=await page.locator('#selected-piece-preview').innerHTML();await page.keyboard.press('f');assert.notEqual(await page.locator('#selected-piece-preview').innerHTML(),rotated);
       await page.keyboard.press('Escape');assert.equal(await page.locator('#preview rect').count(),0);
       await page.locator('#hint').click();await page.locator('#confirm-move').click();assert.equal(await page.locator('#move-number').innerText(),'1');
-      if(await page.locator('#game-history').getAttribute('open')===null) await page.locator('#game-history summary').click();
-      assert.equal(await page.locator('#game-history').getAttribute('open'),'');
-      await page.locator('#theme-toggle').click();assert.equal(await page.locator('#game-history').getAttribute('open'),'','log expansion survives rerenders');
+      await page.locator('#log-button').click();assert.equal(await page.locator('#modal .move-log li').count(),1);await page.keyboard.press('Escape');
+      await page.locator('#theme-toggle').click();await page.locator('#log-button').click();assert.equal(await page.locator('#modal .move-log li').count(),1);await page.keyboard.press('Escape');
       await page.locator('#undo').click();assert.equal(await page.locator('#move-number').innerText(),'0');
       await page.locator('#home-button').click();
     }
@@ -146,7 +145,7 @@ test('UI 2.0 keeps modes, disabled states, replay, drawer focus and rotation cha
     const record=exportReplay(game,['玩家 1','玩家 2','玩家 3','玩家 4']);
     await page.evaluate(record=>localStorage.setItem('djq-local-v1',JSON.stringify(record)),record);await page.reload();await page.locator('#resume-local').click();
     await page.setViewportSize({width:1920,height:1080});
-    await page.locator('#hint').click();await page.waitForFunction(()=>!document.querySelector('#confirm-move').disabled);await page.locator('#game-history summary').click();
+    await page.locator('#hint').click();await page.waitForFunction(()=>!document.querySelector('#confirm-move').disabled);
     if(await page.locator('html').getAttribute('data-theme')==='dark')await page.locator('#theme-toggle').click();
     await page.screenshot({path:'artifacts/browser/ui-v2/desktop-light-midgame.png',fullPage:true});
     await page.locator('#theme-toggle').click();await page.screenshot({path:'artifacts/browser/ui-v2/desktop-dark-midgame.png',fullPage:true});
@@ -157,7 +156,9 @@ test('UI 2.0 keeps modes, disabled states, replay, drawer focus and rotation cha
     await page.keyboard.press('Escape');assert.equal(await page.locator('#dock-pieces').evaluate(n=>n===document.activeElement),true);
     const moveBefore=await page.locator('#preview').innerHTML();await page.locator('[data-action="rotate"]').click();assert.notEqual(await page.locator('#preview').innerHTML(),moveBefore);
     await page.locator('#dock-pieces').click();await page.screenshot({path:'artifacts/browser/ui-v2/phone-landscape-drawer.png',fullPage:true});
-    await page.setViewportSize({width:390,height:844});assert.equal(await page.locator('#game-controls').getAttribute('aria-modal'),null);
+    await page.setViewportSize({width:390,height:844});
+    await page.waitForFunction(()=>!document.querySelector('#game-controls').hasAttribute('aria-modal')&&!document.querySelector('.board-section').inert);
+    assert.equal(await page.locator('#game-controls').getAttribute('aria-modal'),null);
     const board=await page.locator('#board').boundingBox();assert.ok(Math.abs(board.width-board.height)<1);
     await page.setViewportSize({width:844,height:390});assert.equal(await page.locator('#game-controls').isVisible(),false,'rotation closes a stale drawer');
     await page.locator('#home-button').click();
