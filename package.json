@@ -14,7 +14,7 @@
     "check": "node scripts/check.mjs",
     "build": "node scripts/build.mjs",
     "verify": "npm run check && npm test && npm run build",
-    "test:browser": "node --test tests/browser_gameplay.mjs tests/browser_recovery.mjs",
+    "test:browser": "node --test tests/browser_gameplay.mjs tests/browser_recovery.mjs tests/browser_layout.mjs tests/browser_controls.mjs tests/browser_lobby.mjs",
     "benchmark:bots": "node scripts/benchmark-bots.mjs"
   }
 }

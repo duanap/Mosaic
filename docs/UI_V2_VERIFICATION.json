@@ -1,0 +1,151 @@
+{
+  "date": "2026-10-17",
+  "feature": "Match UI 2.0 and lobby dialogs",
+  "baseCommit": "fb73d1b8275fdd563010fce3ed4a3fd613ed2855",
+  "branch": "feat/game-ui-v2-landscape",
+  "native": {
+    "command": "npm run verify",
+    "passed": 70,
+    "failed": 0,
+    "modules": 36,
+    "build": true
+  },
+  "browser": {
+    "command": "npm run test:browser",
+    "passed": 38,
+    "failed": 0,
+    "engine": "Installed Edge/Chromium headless",
+    "mode": "Actual loopback HTTP/SSE, native storage, CSP, module workers and CDP touch",
+    "log": "artifacts/lobby-browser-full.log",
+    "additionalCheck": "artifacts/lobby-menus-final.log"
+  },
+  "viewports": [
+    {
+      "width": 1920,
+      "height": 1080,
+      "board": 938,
+      "threeColumns": true
+    },
+    {
+      "width": 1600,
+      "height": 900,
+      "board": 758,
+      "threeColumns": true
+    },
+    {
+      "width": 1366,
+      "height": 768,
+      "board": 626,
+      "threeColumns": true
+    },
+    {
+      "width": 1280,
+      "height": 800,
+      "board": 610,
+      "threeColumns": true
+    },
+    {
+      "width": 1024,
+      "height": 768,
+      "board": 466,
+      "threeColumns": true
+    },
+    {
+      "width": 844,
+      "height": 390,
+      "board": 254,
+      "threeColumns": false
+    },
+    {
+      "width": 932,
+      "height": 430,
+      "board": 294,
+      "threeColumns": false
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "board": 344,
+      "threeColumns": false
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "board": 314,
+      "threeColumns": false
+    }
+  ],
+  "checks": [
+    "three columns and no whole-page desktop scroll",
+    "square full SVG bounds",
+    "actual 21-piece inventory",
+    "selected rotation/reflection synchronized",
+    "duo/trio/classic/teams and live scores",
+    "disabled illegal confirmation",
+    "finished-game replay export download",
+    "captured drag survives SSE presence updates",
+    "keyboard focus, Esc and modal drawer focus wrap",
+    "orientation changes and inert restoration",
+    "readonly replay and keyboard range navigation",
+    "full local bot game, online bots/teams, undo/rematch and persistent recovery",
+    "minimal board captions and letter-free color markers",
+    "current-color perimeter breathing, no internal seams, removed on commit",
+    "static glow for reduced-motion preferences",
+    "stacked connection/hint buttons and header countdown",
+    "Enter confirms after pointer selection and T requests a hint",
+    "disabled confirmation carries validation or waiting feedback",
+    "top navigation history modal receives live SSE changes",
+    "repeated Enter sends one request while a move is pending",
+    "title and brand version match package.json",
+    "piece-local mirror and check actions follow drag and stay inside board bounds",
+    "native touch mirror and check activation",
+    "portrait selection preserves scroll at 360/390/768px",
+    "portrait square preview and transform tools split row width equally",
+    "puzzle controls precede seats and auxiliary buttons form a separate card",
+    "player colors follow turn status",
+    "one-time winner modal supports dismissal for board inspection",
+    "finished landscape exposes side controls without a bottom dock",
+    "local rematch from dialog and primary button; online rematch remains host-only",
+    "viewport-centered match summary at nine sizes",
+    "square equal-column preview at every tested size",
+    "R/F shortcuts work after removing preview transform buttons",
+    "finished games omit undo, result shortcut and bottom dock",
+    "main rematch remains visible in finished short landscape",
+    "home removes English decorative slogans and subtitles",
+    "three native setup dialogs and waiting-only room menu",
+    "cancel setup without creating rooms; inline join error preserves input",
+    "single-flight create and blocked dismissal while pending",
+    "waiting room dismissal and reload retain membership",
+    "host transfer and last-human room cleanup",
+    "invitation opens prefilled join menu",
+    "attached room blocks competing setup/import/recovery entry points",
+    "auto-height inventory and selection cards with shortcuts inside preview",
+    "borderless floating action container; export only after game end"
+  ],
+  "unchanged": [
+    "shared rules/strategy",
+    "server rooms/bots/auth/protocol",
+    "network recovery",
+    "placement geometry"
+  ],
+  "screenshots": [
+    "docs/screenshots/ui-v2/desktop-light-midgame.png",
+    "docs/screenshots/ui-v2/desktop-dark-midgame.png",
+    "docs/screenshots/ui-v2/phone-landscape-drawer.png",
+    "docs/screenshots/ui-v2/history-dialog.png",
+    "docs/screenshots/ui-v2/phone-portrait-controls.png",
+    "docs/screenshots/ui-v2/result-dialog.png",
+    "docs/screenshots/ui-v2/home-light.png",
+    "docs/screenshots/ui-v2/phone-landscape-finished.png",
+    "docs/screenshots/ui-v2/home-mobile.png",
+    "docs/screenshots/ui-v2/local-setup-mobile.png",
+    "docs/screenshots/ui-v2/room-waiting.png"
+  ],
+  "notVerified": [
+    "physical Android/iOS Safari",
+    "other physical browsers",
+    "production domain deployment"
+  ],
+  "review": "Author self-review; independent review not claimed",
+  "delivery": "Validated for user-authorized main merge and production deployment; production verification recorded separately after release."
+}
