@@ -5,18 +5,18 @@
   "branch": "feat/game-ui-v2-landscape",
   "native": {
     "command": "npm run verify",
-    "passed": 69,
+    "passed": 70,
     "failed": 0,
     "modules": 34,
     "build": true
   },
   "browser": {
     "command": "npm run test:browser",
-    "passed": 32,
+    "passed": 35,
     "failed": 0,
     "engine": "Installed Edge/Chromium headless",
     "mode": "Actual loopback HTTP/SSE, native storage, CSP, module workers and CDP touch",
-    "log": "artifacts/ui-v2-toolbar-browser-final.log"
+    "log": "artifacts/ui-v2-followup-browser-final.log"
   },
   "viewports": [
     {
@@ -95,7 +95,16 @@
     "disabled confirmation carries validation or waiting feedback",
     "top navigation history modal receives live SSE changes",
     "repeated Enter sends one request while a move is pending",
-    "title and brand version match package.json"
+    "title and brand version match package.json",
+    "piece-local mirror and check actions follow drag and stay inside board bounds",
+    "native touch mirror and check activation",
+    "portrait selection preserves scroll at 360/390/768px",
+    "portrait square preview and transform tools split row width equally",
+    "puzzle controls precede seats and auxiliary buttons form a separate card",
+    "player colors follow turn status",
+    "one-time winner modal supports dismissal and reopening",
+    "finished landscape retains operation drawer, export and board inspection",
+    "local rematch from dialog and primary button; online rematch remains host-only"
   ],
   "unchanged": [
     "shared rules/strategy",
@@ -107,7 +116,9 @@
     "docs/screenshots/ui-v2/desktop-light-midgame.png",
     "docs/screenshots/ui-v2/desktop-dark-midgame.png",
     "docs/screenshots/ui-v2/phone-landscape-drawer.png",
-    "docs/screenshots/ui-v2/history-dialog.png"
+    "docs/screenshots/ui-v2/history-dialog.png",
+    "docs/screenshots/ui-v2/phone-portrait-controls.png",
+    "docs/screenshots/ui-v2/result-dialog.png"
   ],
   "notVerified": [
     "physical Android/iOS Safari",

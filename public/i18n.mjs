@@ -5,6 +5,7 @@ const words = {
  neutralRotation:'主色已结束 · 公共绿轮换',colorEnded:'本色已结束',waitingTurn:'等待回合',
  robot:'机器人',human:'真人',team:'队',calculating:'计算中',submitting:'提交中',playersTitle:'对局玩家',
  gameActions:'对局操作',boardTitle:'棋盘',boardGesture:'按住拖动 · 点击旋转',pieces:'选子',
+ pieceActions:'拼图操作',resultTitle:'本局结果',viewBoard:'关闭并查看棋盘',viewResults:'查看结果',gameEnded:'对局已结束',
  perColor:'每色',
  title:'角斗士棋',
  hero:'一角相连，<br>步步为营。',

@@ -79,7 +79,7 @@ test('UI 2.0 fits actual games across desktop tablet and phone sizes',async t=>{
         if(compact) await page.locator('#dock-pieces').click();
         await page.locator('#hint').click();await page.waitForFunction(()=>document.querySelector('#hint-status').textContent.includes('方案'));
         if(compact&&await page.locator('#close-pieces').isVisible()) await page.locator('#close-pieces').click();
-        await page.locator(width<=760||compact?'[data-action="confirm-move"]':'#confirm-move').click();
+        await page.locator(width<=760||compact?'.mobile-dock [data-action="confirm-move"]':'#confirm-move').click();
         assert.equal(await page.locator('#move-number').innerText(),'1');
         if(compact) await page.locator('#dock-pieces').click();
         await page.locator('[data-piece="I5"]').click();if(compact) await page.locator('#dock-pieces').click();

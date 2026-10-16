@@ -13,6 +13,19 @@ export function previewOutline(cells) {
   return edges.join('');
 }
 
+/** Position adjacent to the piece, flipping above it near the board's lower edge. */
+export function pieceActionsPosition(move,board,toolbar) {
+  const cells=transform(move.piece,move.orientation),scaleX=board.width/20,scaleY=board.height/20;
+  const left=board.left+move.x*scaleX,top=board.top+move.y*scaleY;
+  const right=left+(Math.max(...cells.map(c=>c[0]))+1)*scaleX,bottom=top+(Math.max(...cells.map(c=>c[1]))+1)*scaleY;
+  const minX=board.left+4,maxX=Math.max(minX,board.left+board.width-toolbar.width-4);
+  const minY=board.top+4,maxY=Math.max(minY,board.top+board.height-toolbar.height-4);
+  let x=(left+right-toolbar.width)/2,y=bottom+8;
+  if(y>maxY) y=top-toolbar.height-8;
+  if(y<minY) {y=(top+bottom-toolbar.height)/2;x=right+8<=maxX?right+8:left-toolbar.width-8;}
+  return {x:Math.max(minX,Math.min(maxX,x)),y:Math.max(minY,Math.min(maxY,y))};
+}
+
 /** One shape renderer serves the tray and the enlarged current selection. */
 export function pieceSVG(id,orientation=0,{tight=false}={}) {
   const cells=transform(id,orientation),w=Math.max(...cells.map(c=>c[0]))+1,h=Math.max(...cells.map(c=>c[1]))+1;
@@ -27,7 +40,7 @@ export function selectionMarkup(piece,orientation,color) {
 
 let observer;
 /** Fits actual available width AND height without changing the SVG's 600-unit coordinates. */
-export function fitGameBoard() {
+export function fitGameBoard(onFit=()=>{}) {
   observer?.disconnect();observer=null;
   const frame=document.querySelector('.game-shell-v2 .board-frame'),board=frame?.querySelector('#board');
   if(!frame||!board) return;
@@ -35,6 +48,7 @@ export function fitGameBoard() {
     if(!frame.isConnected) return;
     const rect=frame.getBoundingClientRect(),size=Math.max(0,Math.floor(Math.min(rect.width,rect.height)));
     board.style.width=`${size}px`;board.style.height=`${size}px`;
+    onFit();
   };
   fit();observer=new ResizeObserver(fit);observer.observe(frame);
 }

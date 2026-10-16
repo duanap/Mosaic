@@ -4,7 +4,7 @@ import { RoomClient, savedSession, savedSessions } from '/network.mjs';
 import { t } from '/i18n.mjs';
 import { clampOrigin, hitPreview, rotatePreview, flipPreview, initialPreview, beginGesture, moveGesture, endGesture } from '/placement.mjs';
 import { AnalysisClient } from '/analysis-client.mjs';
-import { pieceSVG, selectionMarkup, fitGameBoard, previewOutline } from '/game-ui.mjs';
+import { pieceSVG, selectionMarkup, fitGameBoard, previewOutline, pieceActionsPosition } from '/game-ui.mjs';
 
 const $=selector=>document.querySelector(selector);
 const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -18,6 +18,7 @@ const analysis=new AnalysisClient();
 const botAnalysis=new AnalysisClient();
 let hintMoves=null,hintIndex=0,hintLabel='',analysisGeneration=0,hintPending=false;
 let botGeneration=0,botKey=null;
+const announcedLocalResults=new WeakSet(),announcedOnlineResults=new Set();
 const ui={view:'home',mode:'local',count:4,variant:'classic',seatKinds:['human','human','human','human'],scoring:'bonus',seconds:90,name:read('djq-name',`${t('player')}${Math.floor(Math.random()*900)+100}`),
   joinCode:new URLSearchParams(location.search).get('room')?.toUpperCase().slice(0,6)??'',
   piecesOpen:false,game:null,room:null,names:[],selected:null,orientation:0,cursor:null,showCorners:false,pending:false,connected:false,
@@ -98,58 +99,69 @@ function lobbyView() {
   return `<main class="lobby-shell"><div class="lobby-intro"><p class="eyebrow">YOUR TABLE</p><h1>${t('lobbyTitle')}</h1><p>${t('lobbyDesc')}</p></div><div class="lobby-grid"><section class="lobby-main panel"><div class="lobby-code"><div><span class="eyebrow">${t('code')}</span><strong id="room-code">${r.code}</strong></div><button id="copy-invite" class="button secondary">${icon('link')}${t('invite')}</button></div><div class="lobby-seats">${r.players.map((p,i)=>`<div class="lobby-seat ${p?'':'empty'}"><div class="seat-avatar c${i}">${i+1}</div><div class="seat-name"><strong>${p?escape(p.name):t('empty')}${r.mode==='teams'?` / ${i%2?'B':'A'}队`:''}</strong><span>${ownedColors(r.capacity,i).map(badge).join('')} ${i===r.host?t('host'):''} ${i===r.you?` / ${t('you')}`:''}</span></div><span class="seat-status">${p?p.kind==='bot'?'标准机器人':t(p.connected?'connected':'offline'):''}</span>${host&&!p?`<button class="button secondary small" data-add-bot="${i}"${busy()}>添加机器人</button>`:''}${host&&p?.kind==='bot'?`<button class="text-button" data-remove-bot="${i}"${busy()}>移除</button>`:''}</div>`).join('')}</div><div class="lobby-buttons">${host?`<button id="online-start" class="button primary" ${!full||!online||!ui.connected||ui.pending?'disabled':''}>${t('start')}${icon('arrow')}</button>`:`<span>${t('waitHost')}</span>`}<p class="fine">${!full?'等待朋友加入，或添加机器人补齐空位':!online?'等待真人玩家重新连接':'玩家已就位，由房主开始'}</p></div></section><aside class="panel lobby-aside"><p class="eyebrow">TABLE SETTINGS</p><h2>${r.capacity} ${t('people')} / ${r.mode==='teams'?'双色组队':t('mode'+r.capacity)}</h2><dl><div><dt>BOARD</dt><dd>20 &times; 20</dd></div><div><dt>${t('scoring')}</dt><dd>${t(r.scoring)}</dd></div><div><dt>${t('turnLimit')}</dt><dd>${r.turnSeconds} ${t('seconds')}</dd></div></dl><p>${r.mode==='teams'?'蓝红为A队，黄绿为B队。每人控制自己的颜色，按队伍总分结算。':t(r.capacity===3?'neutralHelp':'ruleFirst')}</p>${connectionLabel()}<button id="leave-room" class="text-button">${icon('back')}${t('home')}</button></aside></div></main>`;
 }
 function canPlay() {return ui.view==='game'&&ui.game?.status==='playing'&&!ui.pending&&(ui.mode==='local'?ui.game.seats[controller(ui.game)].kind==='human':(ui.connected&&ui.room?.you===controller(ui.game)));}
+function canRematch() {return ui.view==='game'&&ui.game?.status==='finished'&&!ui.pending&&(ui.mode==='local'||ui.connected&&ui.room?.you===ui.room?.host);}
+function resultAnnounced() {return ui.mode==='online'?announcedOnlineResults.has(`${ui.room.code}:${ui.room.round}`):announcedLocalResults.has(ui.game);}
 function playerCards(game) {
   return `<div class="player-cards players-${game.players}">${scores(game).map(s=>{
     const active=game.status==='playing'&&controller(game)===s.player,bot=game.seats[s.player].kind==='bot',color=active?game.turn:s.colors[0];
     const ended=s.colors.every(c=>game.stopped[c]);
     const offline=ui.mode==='online'&&!bot&&!ui.room?.players[s.player]?.connected;
-    const state=s.resigned?t('resigned'):game.status==='finished'?(s.winner?t('win'):t('finished')):active?t(bot?'thinking':'currentTurn')+(offline?` · ${t('offline')}`:''):offline?t('offline'):ended?(game.players===3&&!game.stopped[3]?t('neutralRotation'):t('colorEnded')):t('waitingTurn');
-    return `<article class="player-card c${color} ${active?'active':''} ${s.resigned?'forfeited':''}" data-player="${s.player}" ${active?'aria-current="true"':''}><div class="player-ident"><span class="player-avatar">${s.player+1}</span><div><strong>${escape(playerName(s.player))}</strong>${game.mode==='teams'||ui.mode==='online'&&ui.room?.you===s.player?`<small class="player-affiliation">${[game.mode==='teams'?`${s.player%2?'B':'A'}${t('team')}`:null,ui.mode==='online'&&ui.room?.you===s.player?t('you'):null].filter(Boolean).join(' · ')}</small>`:''}<div class="player-colors">${s.colors.map(c=>`<span>${badge(c)}${t(COLORS[c])}${t('colorSuffix')}</span>`).join('')}</div></div></div><div class="player-score"><strong>${s.score>0?'+':''}${s.score}</strong></div><span class="player-state ${active?'is-current':''}">${state}</span></article>`;
+    const state=s.resigned?t('resigned'):game.status==='finished'?(s.winner?t('win'):t('gameEnded')):active?t(bot?'thinking':'currentTurn')+(offline?` · ${t('offline')}`:''):offline?t('offline'):ended?(game.players===3&&!game.stopped[3]?t('neutralRotation'):t('colorEnded')):t('waitingTurn');
+    return `<article class="player-card c${color} ${active?'active':''} ${s.resigned?'forfeited':''}" data-player="${s.player}" ${active?'aria-current="true"':''}><div class="player-ident"><span class="player-avatar">${s.player+1}</span><div><strong>${escape(playerName(s.player))}</strong>${game.mode==='teams'||ui.mode==='online'&&ui.room?.you===s.player?`<small class="player-affiliation">${[game.mode==='teams'?`${s.player%2?'B':'A'}${t('team')}`:null,ui.mode==='online'&&ui.room?.you===s.player?t('you'):null].filter(Boolean).join(' · ')}</small>`:''}</div></div><div class="player-score"><strong>${s.score>0?'+':''}${s.score}</strong></div><div class="player-state ${active?'is-current':''}"><span>${state}</span><span class="player-colors">${s.colors.map(c=>`<span>${badge(c)}${t(COLORS[c])}${t('colorSuffix')}</span>`).join('')}</span></div></article>`;
   }).join('')}</div>`;
+}
+function auxiliaryControls(game) {
+  const replaying=ui.view==='replay';
+  return `<div class="auxiliary-actions"><button id="show-corners" class="text-button" aria-pressed="${ui.showCorners}">${icon('hint')}${t('corners')}</button><button id="export-replay" class="text-button">${icon('export')}${t('export')}</button>${game.status==='finished'?`<button id="result-button" class="text-button">${icon('trophy')}${t('viewResults')}</button>`:''}${!replaying&&ui.mode==='local'?`<button id="undo" class="text-button" ${!game.history.length?'disabled':''}>${icon('back')}${t('undo')}</button>`:''}${!replaying&&game.status==='playing'?`<button id="resign" class="text-button danger" ${ui.pending||ui.mode==='local'&&!canPlay()||ui.mode==='online'&&(!ui.connected||game.resigned[ui.room.you])?'disabled':''}>${t('resign')}</button>`:''}</div>`;
+}
+function controlsAndActions(game) {
+  const modal=compactGame.matches&&ui.piecesOpen;
+  return `<div id="game-controls" class="controls-column" ${modal?'role="dialog" aria-modal="true"':''} aria-label="${t('gameActions')}">${controls(game)}<aside class="auxiliary-panel panel" aria-label="${t('gameActions')}">${auxiliaryControls(game)}${ui.view==='replay'?'':`<div class="commit-section"><span id="hint-status" class="visually-hidden" role="status" aria-live="polite"></span><div class="commit-actions"><button id="confirm-move" class="button primary confirm-button" disabled aria-busy="${ui.pending}">${icon('check')}<span id="preview-status" role="status" aria-live="polite">${t('noSelection')}</span></button></div></div>`}</aside></div>`;
 }
 function controls(game) {
   const active=game.turn,allowed=canPlay(),remaining=game.remaining[active],replaying=ui.view==='replay';
-  const modal=compactGame.matches&&ui.piecesOpen;
   const close=`<button id="close-pieces" class="icon-button close-pieces" aria-label="${t('closePieces')}">${icon('close')}</button>`;
-  const auxiliary=`<div class="auxiliary-actions"><button id="show-corners" class="text-button" aria-pressed="${ui.showCorners}">${icon('hint')}${t('corners')}</button><button id="export-replay" class="text-button">${icon('export')}${t('export')}</button>${!replaying&&ui.mode==='local'?`<button id="undo" class="text-button" ${!game.history.length?'disabled':''}>${icon('back')}${t('undo')}</button>`:''}${!replaying&&game.status==='playing'?`<button id="resign" class="text-button danger" ${ui.pending||ui.mode==='local'&&!canPlay()||ui.mode==='online'&&(!ui.connected||game.resigned[ui.room.you])?'disabled':''}>${t('resign')}</button>`:''}</div>`;
-  if(replaying) return `<aside id="game-controls" class="control-panel panel replay-panel" ${modal?'role="dialog" aria-modal="true"':''} aria-labelledby="controls-title">${close}<div class="control-scroll"><p class="eyebrow">REPLAY / READ ONLY</p><h2 id="controls-title">${t('replay')}</h2><p class="replay-help">${t('replayHelp')}</p><div class="replay-progress"><strong id="replay-label">${ui.replayStep} / ${ui.replayRecord.actions.length}</strong><input id="replay-range" aria-label="${t('replay')}" type="range" min="0" max="${ui.replayRecord.actions.length}" value="${ui.replayStep}"></div>${auxiliary}</div><div class="replay-buttons"><button id="replay-prev" class="button secondary" ${ui.replayStep===0?'disabled':''}>${icon('back')}${t('prev')}</button><button id="replay-next" class="button primary" ${ui.replayStep===ui.replayRecord.actions.length?'disabled':''}>${t('next')}${icon('arrow')}</button></div></aside>`;
-  return `<aside id="game-controls" class="control-panel panel" ${modal?'role="dialog" aria-modal="true"':''} aria-label="${t('choosePiece')}">${close}<div class="control-scroll"><div class="tray-legend"><span class="c${active}"><i></i>${t('available')}</span><span><i></i>${t('used')}</span></div>
+
+  if(replaying) return `<aside id="piece-controls" class="control-panel panel replay-panel"  aria-labelledby="controls-title">${close}<div class="control-scroll"><p class="eyebrow">REPLAY / READ ONLY</p><h2 id="controls-title">${t('replay')}</h2><p class="replay-help">${t('replayHelp')}</p><div class="replay-progress"><strong id="replay-label">${ui.replayStep} / ${ui.replayRecord.actions.length}</strong><input id="replay-range" aria-label="${t('replay')}" type="range" min="0" max="${ui.replayRecord.actions.length}" value="${ui.replayStep}"></div></div><div class="replay-buttons"><button id="replay-prev" class="button secondary" ${ui.replayStep===0?'disabled':''}>${icon('back')}${t('prev')}</button><button id="replay-next" class="button primary" ${ui.replayStep===ui.replayRecord.actions.length?'disabled':''}>${t('next')}${icon('arrow')}</button></div></aside>`;
+  return `<aside id="piece-controls" class="control-panel panel"  aria-label="${t('choosePiece')}">${close}<div class="control-scroll"><div class="tray-legend"><span class="c${active}"><i></i>${t('available')}</span><span><i></i>${t('used')}</span></div>
   <div class="piece-tray c${active}" aria-label="${t('choosePiece')}">${PIECES.slice().reverse().map(p=>`<button class="piece ${ui.selected===p.id?'selected':''} ${remaining.includes(p.id)?'':'used'}" data-piece="${p.id}" aria-label="${p.id} / ${p.cells.length} ${t('squares')}" aria-pressed="${ui.selected===p.id}" ${!allowed||!remaining.includes(p.id)?'disabled':''}>${miniPiece(p.id,ui.selected===p.id?ui.orientation:0)}<span>${p.id}</span></button>`).join('')}</div>
   <section class="selection-tools" aria-label="${t('choosePiece')}"><div class="selection-preview"><div id="selected-piece" class="selected-piece">${selectionMarkup(ui.selected,ui.orientation,active)}</div><button id="clear-selection" class="icon-button" aria-label="${t('clear')}" ${!ui.selected?'disabled':''}>${icon('close')}</button></div><div class="transform-tools"><button id="rotate" class="tool-button" ${!allowed||!ui.selected?'disabled':''}>${icon('rotate')}${t('rotate')}<kbd>R</kbd></button><button id="flip" class="tool-button" ${!allowed||!ui.selected?'disabled':''}>${icon('flip')}${t('flip')}<kbd>F</kbd></button><button id="hint" class="tool-button hint-button" ${!allowed||hintPending?'disabled':''} aria-busy="${hintPending}">${icon('hint')}${t(hintPending?'calculating':'hint')}<kbd>T</kbd><small id="hint-sequence"></small></button></div></section>
-  ${auxiliary}</div><div class="commit-section"><span id="hint-status" class="visually-hidden" role="status" aria-live="polite"></span><div class="commit-actions"><button id="confirm-move" class="button primary confirm-button" disabled aria-busy="${ui.pending}">${icon('check')}<span id="preview-status" role="status" aria-live="polite">${t('noSelection')}</span></button></div></div></aside>`;
+  </div></aside>`;
 }
 function moveLog(game) {
   return `<section class="move-log"><h3>${t('log')}</h3>${game.history.length?`<ol>${game.history.slice().reverse().map(a=>`<li>${a.type==='move'?badge(a.color):icon('close')}<span>${escape(playerName(a.player))}<small>${a.type==='move'?`${a.move.piece} / ${String.fromCharCode(65+a.move.x)}${a.move.y+1}${a.source==='bot'?' / 机器人':a.automatic?` / ${t('auto')}`:''}`:t('resigned')}</small></span></li>`).join('')}</ol>`:`<p>${t('emptyLog')}</p>`}</section>`;
 }
 function resultView(game) {
-  const winners=game.mode==='teams'?teamScores(game).filter(s=>s.winner):scores(game).filter(s=>s.winner);
-  const labels=winners.map(s=>game.mode==='teams'?`${s.team?'B':'A'}队（${s.members.map(i=>escape(playerName(i))).join('、')}）`:escape(playerName(s.player)));
-  return `<section class="result-banner"><div class="result-icon">${icon('trophy')}</div><div><p class="eyebrow">WELL PLAYED</p><h2>${labels.join(' & ')} ${t(winners.length>1?'tie':'win')}</h2><p>${t('finished')} / ${t(game.scoring)}</p></div>${ui.view!=='replay'?(ui.mode==='local'||ui.room.you===ui.room.host?`<button id="rematch" class="button primary"${busy()}>${t('rematch')}${icon('arrow')}</button>`:`<span>${t('waitHost')}</span>`):''}</section>`;
+  const teams=game.mode==='teams',rows=teams?teamScores(game):scores(game),winners=rows.filter(s=>s.winner);
+  const name=s=>teams?`${s.team?'B':'A'}${t('team')}（${s.members.map(i=>escape(playerName(i))).join('、')}）`:escape(playerName(s.player));
+  return `<section class="result-summary"><div class="result-icon">${icon('trophy')}</div><h3>${winners.map(name).join(' & ')} ${t(winners.length>1?'tie':'win')}</h3><p>${t(game.scoring)}</p><ol class="result-scores">${rows.map(s=>`<li class="${s.winner?'winner':''}"><span>${name(s)}</span><strong>${s.score>0?'+':''}${s.score}</strong></li>`).join('')}</ol>${ui.view==='game'?(ui.mode==='local'||ui.room.you===ui.room.host?`<button id="rematch" class="button primary" ${canRematch()?'':'disabled'}>${t('rematch')}${icon('arrow')}</button>`:`<span>${t('waitHost')}</span>`):''}</section>`;
 }
 function teamCards(game) {return game.mode==='teams'?`<div class="team-cards">${teamScores(game).map(s=>`<article><strong>${s.team?'B':'A'}队 · ${s.members.map(i=>escape(playerName(i))).join(' + ')}</strong><span>${s.score}分</span></article>`).join('')}</div>`:'';}
 function mobileDock(game) {
   if(ui.view==='replay') return `<div class="mobile-dock replay-dock"><button data-action="replay-prev" ${ui.replayStep===0?'disabled':''}>${icon('back')}${t('prev')}</button><button id="dock-pieces" aria-controls="game-controls" aria-expanded="${ui.piecesOpen}">${t('replay')} ${ui.replayStep}/${ui.replayRecord.actions.length}</button><button data-action="replay-next" ${ui.replayStep===ui.replayRecord.actions.length?'disabled':''}>${t('next')}${icon('arrow')}</button></div>`;
-  if(game.status!=='playing') return `<div class="mobile-dock ended-dock"><button id="dock-pieces" aria-controls="game-controls" aria-expanded="${ui.piecesOpen}">${icon('export')}${t('gameActions')}</button></div>`;
+  if(game.status!=='playing') return `<div class="mobile-dock ended-dock"><button id="dock-pieces" aria-controls="game-controls" aria-expanded="${ui.piecesOpen}">${icon('export')}${t('gameActions')}</button><button data-action="rematch" class="dock-confirm" ${canRematch()?'':'disabled'}>${icon('check')}${t('rematch')}</button></div>`;
   const allowed=canPlay();
   return `<div class="mobile-dock"><div class="dock-status">${badge(game.turn)}<span>${ui.selected??t('noSelection')}</span><small>${t(game.seats[controller(game)].kind==='bot'?'thinking':allowed?'yourTurn':'otherTurn')}</small></div><div class="dock-actions"><button data-action="rotate" ${!allowed||!ui.selected?'disabled':''}>${icon('rotate')}${t('rotate')}</button><button data-action="flip" ${!allowed||!ui.selected?'disabled':''}>${icon('flip')}${t('flip')}</button><button id="dock-pieces" aria-controls="game-controls" aria-expanded="${ui.piecesOpen}">${icon('users')}${t('pieces')}</button><button data-action="confirm-move" class="dock-confirm" disabled>${icon('check')}${t(ui.pending?'submitting':'confirm')}</button></div></div>`;
 }
 function gameView() {
-  const game=ui.game,playing=game.status==='playing';
+  const game=ui.game;
   return `<main class="game-shell game-shell-v2 ${ui.piecesOpen?'pieces-open':''}"><div class="game-layout"><aside class="players-panel" aria-labelledby="players-heading"><div class="players-heading"><h2 id="players-heading">${t('playersTitle')}</h2><span>${game.players} ${t('people')}</span></div>${playerCards(game)}${teamCards(game)}
   ${game.players===3?`<div class="neutral-bar">${badge(3)}<strong>${t('neutral')}</strong><span>${t('neutralHelp')}</span><b>${escape(playerName(controller(game,3)))}</b></div>`:''}${ui.mode==='online'?`<div class="table-status">${connectionLabel()}</div>`:''}</aside>
-  <section class="board-section" aria-label="${t('boardTitle')}">${!playing?resultView(game):''}
-  <div class="board-frame">${boardSVG(game)}</div><span id="move-number" class="visually-hidden">${game.history.filter(a=>a.type==='move').length}</span></section>${controls(game)}</div>${ui.view==='game'?`<p id="game-shortcuts" class="keyboard-help">${t('shortcut')}</p>`:''}<button id="pieces-backdrop" class="pieces-backdrop" aria-label="${t('closePieces')}" tabindex="-1"></button>${mobileDock(game)}</main>`;
+  <section class="board-section" aria-label="${t('boardTitle')}">
+  <div class="board-frame">${boardSVG(game)}<div id="piece-actions" class="piece-actions c${game.turn}" role="group" aria-label="${t('pieceActions')}" hidden><button id="floating-flip" data-action="flip" aria-label="${t('flip')}" title="${t('flip')}">${icon('flip')}</button><button id="floating-confirm" data-action="confirm-move" aria-label="${t('confirm')}" title="${t('confirm')}" disabled>${icon('check')}</button></div></div><span id="move-number" class="visually-hidden">${game.history.filter(a=>a.type==='move').length}</span></section>${controlsAndActions(game)}</div>${ui.view==='game'?`<p id="game-shortcuts" class="keyboard-help">${t('shortcut')}</p>`:''}<button id="pieces-backdrop" class="pieces-backdrop" aria-label="${t('closePieces')}" tabindex="-1"></button>${mobileDock(game)}</main>`;
 }
 function render() {
   if(drag) return;
+  if(ui.view==='game'&&ui.game?.status==='finished'&&!resultAnnounced()) ui.piecesOpen=false;
   const focused=document.activeElement,focusId=focused?.id,focusPiece=focused?.dataset?.piece;
   document.body.dataset.screen=ui.view==='game'||ui.view==='replay'?'game':ui.view;
   $('#app').innerHTML=header()+(ui.view==='home'?homeView():ui.view==='lobby'?lobbyView():gameView());
   if(compactGame.matches&&ui.piecesOpen) document.querySelectorAll('.match-header,.players-panel,.board-section,.mobile-dock').forEach(node=>{node.inert=true;});
   if(ui.game&&ui.view!=='home'&&ui.view!=='lobby') {updatePreview();drawFrontiers();}
-  fitGameBoard();
+  fitGameBoard(positionPieceActions);
   updateCountdown();
   syncLogDialog();
+  syncResultDialog();
   const replacement=focusId?document.getElementById(focusId):focusPiece?document.querySelector(`[data-piece="${focusPiece}"]`):null;
   if(replacement&&!replacement.disabled&&replacement.getClientRects().length) replacement.focus({preventScroll:true});
   scheduleLocalBot();
@@ -160,23 +172,39 @@ function updateCountdown() {
   node.textContent=`${seconds}s`;node.classList.toggle('urgent',seconds<=15);
 }
 function currentMove() {return ui.selected&&ui.cursor?{piece:ui.selected,orientation:ui.orientation,x:ui.cursor.x,y:ui.cursor.y}:null;}
+function positionPieceActions() {
+  const group=$('#piece-actions'),board=$('#board'),move=currentMove();if(!group||!board) return;
+  group.hidden=!move||!canPlay()||compactGame.matches&&ui.piecesOpen;
+  if(group.hidden) return;
+  const frame=board.parentElement.getBoundingClientRect(),rect=board.getBoundingClientRect();
+  const position=pieceActionsPosition(move,rect,group.getBoundingClientRect());
+  group.style.left=`${position.x-frame.left}px`;group.style.top=`${position.y-frame.top}px`;
+  $('#floating-flip').disabled=!canPlay();
+}
 function updatePreview() {
   const group=$('#preview'),message=$('#preview-status'),confirm=$('#confirm-move');if(!group) return;
   const move=currentMove(),result=move?validateMove(ui.game,move):null;
   const cells=move?transform(move.piece,move.orientation).map(([x,y])=>[x+move.x,y+move.y]):[];
   group.innerHTML=cells.map(([x,y])=>`<rect class="ghost c${ui.game.turn} ${result?.ok?'valid':'invalid'}" x="${x*30+1.5}" y="${y*30+1.5}" width="27" height="27" rx="3.6"/>`).join('')+(move?`<path class="preview-outline c${ui.game.turn}" d="${previewOutline(cells)}"/>`:'');
-  const feedback=ui.pending?t('submitting'):ui.game.status!=='playing'?t('finished'):!canPlay()?t(ui.mode==='online'&&!ui.connected?'reconnecting':ui.game.seats[controller(ui.game)].kind==='bot'?'thinking':'otherTurn'):!move?t('noSelection'):result.ok?t('confirm'):`${t(result.code)} (${move.x+1}, ${move.y+1})`;
+  const feedback=ui.pending?t('submitting'):ui.game.status!=='playing'?t('rematch'):!canPlay()?t(ui.mode==='online'&&!ui.connected?'reconnecting':ui.game.seats[controller(ui.game)].kind==='bot'?'thinking':'otherTurn'):!move?t('noSelection'):result.ok?t('confirm'):`${t(result.code)} (${move.x+1}, ${move.y+1})`;
   if(message) message.textContent=feedback;
-  if(confirm) confirm.disabled=!canPlay()||!result?.ok;
+  if(confirm) {
+    const ended=ui.game.status==='finished';confirm.disabled=ended?!canRematch():!canPlay()||!result?.ok;
+    if(ended) confirm.dataset.action='rematch';else delete confirm.dataset.action;
+  }
   if(confirm) confirm.dataset.feedback=move&&!result?.ok?'invalid':result?.ok?'ready':'neutral';
-  const dock=$('[data-action="confirm-move"]');
-  if(dock) {dock.disabled=!canPlay()||!result?.ok;dock.innerHTML=`<span>${escape(feedback)}</span>`;}
+  document.querySelectorAll('[data-action="confirm-move"]').forEach(button=>{
+    button.disabled=!canPlay()||!result?.ok;
+    if(button.id==='floating-confirm') {button.title=feedback;button.setAttribute('aria-label',feedback);}
+    else button.innerHTML=`<span>${escape(feedback)}</span>`;
+  });
   const hintStatus=$('#hint-status'),hintSequence=$('#hint-sequence');
   if(hintStatus) hintStatus.textContent=hintLabel;
   if(hintSequence) hintSequence.textContent=hintLabel&&hintMoves?.length?`${hintIndex||hintMoves.length}/${hintMoves.length}`:'';
   syncTray();
   const selected=$('#selected-piece'),key=`${ui.selected}:${ui.orientation}:${ui.game.turn}`;
   if(selected&&selected.dataset.selection!==key) {selected.innerHTML=selectionMarkup(ui.selected,ui.orientation,ui.game.turn);selected.dataset.selection=key;}
+  positionPieceActions();
 }
 function drawFrontiers() {
   const node=$('#frontiers');if(!node) return;node.innerHTML='';
@@ -238,6 +266,28 @@ function syncLogDialog() {
   const log=$('#modal-log'),key=`${ui.room?.code}:${ui.room?.round}:${ui.view}:${ui.game.revision}`;
   if(log&&log.dataset.revision!==key) {const top=dialog.scrollTop;log.innerHTML=moveLog(ui.game);log.dataset.revision=key;dialog.scrollTop=top;}
 }
+function showResultDialog() {
+  if(!ui.game||ui.game.status!=='finished') return;
+  const dialog=$('#modal');dialog.dataset.content='result';
+  dialog.innerHTML=`<div class="modal-heading"><h2 id="modal-title">${t('resultTitle')}</h2><button id="close-modal" class="icon-button" aria-label="${t('viewBoard')}">${icon('close')}</button></div><div id="result-content">${resultView(ui.game)}</div>`;
+  if(!dialog.open) dialog.showModal();
+  dialog.scrollTop=0;$('#close-modal').focus({preventScroll:true});
+}
+function syncResultDialog() {
+  const dialog=$('#modal');
+  if(ui.view!=='game'||ui.game?.status!=='finished') {
+    if(dialog.open&&dialog.dataset.content==='result') dialog.close();
+    return;
+  }
+  if(dialog.open&&dialog.dataset.content==='result') {const button=$('#rematch');if(button) button.disabled=!canRematch();}
+  if(ui.mode==='online') {
+    const key=`${ui.room.code}:${ui.room.round}`;
+    if(announcedOnlineResults.has(key)) return;announcedOnlineResults.add(key);
+  } else {
+    if(announcedLocalResults.has(ui.game)) return;announcedLocalResults.add(ui.game);
+  }
+  showResultDialog();
+}
 function exportFile() {
   const record=ui.view==='replay'?ui.replayRecord:exportReplay(ui.game,ui.names),blob=new Blob([JSON.stringify(record,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`djq-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -272,12 +322,12 @@ async function handleButton(button) {
   if(button.dataset.piece) {
     if(!canPlay()) return;manualPreview();setPreview(initialPreview(ui.game,button.dataset.piece,currentMove()));ui.piecesOpen=false;render();
     $('#board').focus({preventScroll:true});
-    if(!compactGame.matches&&matchMedia('(max-width:760px)').matches) $('#board').scrollIntoView({block:'center'});
     return;
   }
   if(id==='theme-toggle') {captureOptions();ui.theme=ui.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=ui.theme;write('djq-theme',ui.theme);render();}
   else if(id==='rules-button') showRules();
   else if(id==='log-button') showLog();
+  else if(id==='result-button') showResultDialog();
   else if(id==='home-button'||id==='leave-room') {captureOptions();await goHome();}
   else if(id==='local-start') {captureOptions();beginLocal();}
   else if(id==='resume-local') {try{beginLocal(read(LOCAL));}catch{write(LOCAL,null);throw Error('INVALID_REPLAY');}}
@@ -333,6 +383,7 @@ async function handleButton(button) {
     else {ui.pending=true;render();try{await network.command({type:'resign',round:ui.room.round,revision:ui.game.revision});}finally{ui.pending=false;render();}}
   }
   else if(id==='rematch') {
+    if(!canRematch()) return;$('#modal').close();
     if(ui.mode==='local') {ui.count=ui.game.players;ui.variant=ui.game.mode==='teams'?'teams':'classic';ui.seatKinds=ui.game.seats.map(s=>s.kind);ui.scoring=ui.game.scoring;beginLocal();}
     else {ui.pending=true;render();try{await network.command({type:'rematch'});}finally{ui.pending=false;render();}}
   }
@@ -345,7 +396,10 @@ $('#app').addEventListener('click',event=>{
   if(Date.now()<suppressClickUntil&&event.target.closest('#board,[data-piece]')) return;
   const button=event.target.closest('button');if(button&&!button.disabled) handleButton(button).catch(error=>toast(t(error.message)));
 });
-$('#modal').addEventListener('click',event=>{if(event.target.closest('#close-modal')||event.target===$('#modal')) $('#modal').close();});
+$('#modal').addEventListener('click',event=>{
+  if(event.target.closest('#close-modal')||event.target===$('#modal')) $('#modal').close();
+  else {const button=event.target.closest('#rematch');if(button&&!button.disabled) handleButton(button).catch(error=>toast(t(error.message)));}
+});
 $('#app').addEventListener('change',event=>{
   if(event.target.id==='replay-range') setReplayStep(Number(event.target.value));else {captureOptions();if(event.target.id==='game-mode') render();}
 });
@@ -381,6 +435,7 @@ document.addEventListener('pointercancel',event=>finishGesture(event,true));
 document.addEventListener('lostpointercapture',event=>finishGesture(event,true));
 window.addEventListener('blur',()=>finishGesture(null,true));
 document.addEventListener('keydown',event=>{
+  if($('#modal').open) return;
   if(compactGame.matches&&ui.piecesOpen) {
     if(event.key==='Escape') {event.preventDefault();ui.piecesOpen=false;render();$('#dock-pieces')?.focus({preventScroll:true});return;}
     if(event.key==='Tab') {
@@ -390,7 +445,7 @@ document.addEventListener('keydown',event=>{
       else if(!event.shiftKey&&document.activeElement===last) {event.preventDefault();first?.focus();}
     }
   }
-  if($('#modal').open||event.ctrlKey||event.metaKey||event.altKey||event.target.closest('input,select,textarea,[contenteditable="true"]')) return;
+  if(event.ctrlKey||event.metaKey||event.altKey||event.target.closest('input,select,textarea,[contenteditable="true"]')) return;
   if(!canPlay()) return;
   if(drag) {if(event.key==='Escape') finishGesture(null,true);return;}
   if(event.key==='Enter'&&event.repeat) {event.preventDefault();return;}

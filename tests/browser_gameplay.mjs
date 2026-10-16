@@ -48,7 +48,7 @@ test('desktop and touch placement uses held drag and full-piece bounds',async t=
         const cells=await page.locator('#preview rect').evaluateAll(nodes=>nodes.map(n=>[Number(n.getAttribute('x')),Number(n.getAttribute('y'))]));
         assert.ok(cells.every(([x,y])=>x>=0&&x<600&&y>=0&&y<600));
         assert.equal(await page.locator('#move-number').innerText(),'0');
-        await page.locator('#hint').click();await page.locator(mobile?'[data-action="confirm-move"]':'#confirm-move').click();
+        await page.locator('#hint').click();await page.locator(mobile?'.mobile-dock [data-action="confirm-move"]':'#confirm-move').click();
         assert.equal(await page.locator('#move-number').innerText(),'1');
         assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
         await mkdir('artifacts/browser',{recursive:true});await page.screenshot({path:`artifacts/browser/gameplay-${mobile?'touch':'desktop'}.png`,fullPage:true});
@@ -149,7 +149,9 @@ test('four-player team room with two humans and two bots starts directly and rem
       if(room.players[actor].kind==='human') app.store.command(code,room.players[actor].token,{type:'move',round:room.round,revision:g.revision,move:findMove(g)});
       else await new Promise(r=>setTimeout(r,40));
     }
-    assert.equal(app.store.snapshot(code).phase,'finished');await a.locator('#rematch').click();await a.locator('#online-start').click();
+    assert.equal(app.store.snapshot(code).phase,'finished');await b.locator('#result-content').waitFor();assert.equal(await b.locator('.result-scores li').count(),2);assert.equal(await b.locator('#rematch').count(),0,'only the host starts a rematch');
+    await b.locator('#close-modal').click();assert.equal(await b.locator('#confirm-move').isDisabled(),true);await b.locator('#theme-toggle').click();assert.equal(await b.locator('#modal').isVisible(),false,'a dismissed online result stays dismissed');
+    await a.locator('#rematch').click();await a.locator('#online-start').click();
     assert.equal(app.store.snapshot(code).round,2);assert.equal(app.store.snapshot(code).game.seats[2].kind,'bot');
   } finally {await browser.close();app.shutdown();await new Promise(r=>app.server.close(r));}
 });

@@ -3,7 +3,73 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { readFile, mkdir } from 'node:fs/promises';
 import { createApp } from '../server/index.mjs';
+import { newGame, applyMove, findMove, exportReplay } from '../shared/rules.mjs';
 const {chromium}=createRequire(import.meta.url)(process.env.DJQ_PLAYWRIGHT_MODULE||'playwright');
+
+test('piece-local flip and confirm follow held drags and stay inside the board',async()=>{
+  const app=createApp();await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
+  const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
+  try {
+    const page=await browser.newPage({viewport:{width:1366,height:768}});await page.goto(`http://127.0.0.1:${app.server.address().port}`);await page.locator('#local-start').click();
+    assert.equal(await page.locator('#piece-actions').isVisible(),false);
+    await page.locator('[data-piece="F5"]').click();assert.equal(await page.locator('#floating-confirm').isDisabled(),true);
+    const before=await page.locator('#preview').innerHTML();await page.locator('#floating-flip').click();assert.notEqual(await page.locator('#preview').innerHTML(),before);
+    const board=await page.locator('#board').boundingBox(),cell=board.width/20,ghost=await page.locator('#preview rect').last().boundingBox(),toolbar=await page.locator('#piece-actions').boundingBox();
+    const x=ghost.x+ghost.width/2,y=ghost.y+ghost.height/2;
+    await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+cell*4,y+cell*4,{steps:4});await page.mouse.up();
+    const after=await page.locator('#piece-actions').boundingBox();assert.ok(after.y>toolbar.y+cell*3,'toolbar follows the held piece');
+    assert.ok(after.x>=board.x&&after.y>=board.y&&after.x+after.width<=board.x+board.width&&after.y+after.height<=board.y+board.height);
+    await page.locator('#hint').click();await page.waitForFunction(()=>!document.querySelector('#floating-confirm').disabled);await page.locator('#floating-confirm').click();
+    assert.equal(await page.locator('#move-number').innerText(),'1');assert.equal(await page.locator('#piece-actions').isVisible(),false);
+  } finally {await browser.close();app.shutdown();await new Promise(r=>app.server.close(r));}
+});
+
+test('portrait selection preserves scroll, splits preview equally and precedes seats',async()=>{
+  const app=createApp();await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
+  const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
+  try {
+    const page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true});await page.goto(`http://127.0.0.1:${app.server.address().port}`);await page.locator('#local-start').click();
+    for(const [width,height] of [[390,844],[360,800],[768,1024]]) {
+      await page.setViewportSize({width,height});
+      await page.locator('[data-piece="F5"]').evaluate(node=>scrollTo(0,node.getBoundingClientRect().top+scrollY-180));await page.evaluate(()=>new Promise(requestAnimationFrame));const scroll=await page.evaluate(()=>scrollY);
+      assert.ok(scroll>0);await page.locator('[data-piece="F5"]').tap();
+      assert.ok(Math.abs(await page.evaluate(()=>scrollY)-scroll)<2,'selecting a piece never jumps back to the board');
+      const preview=await page.locator('.selection-preview').boundingBox(),tools=await page.locator('.transform-tools').boundingBox();
+      assert.ok(Math.abs(preview.width-tools.width)<1,'preview and actions each get half the row');assert.ok(Math.abs(preview.width-preview.height)<1,'preview card is square');
+      const controls=await page.locator('#game-controls').boundingBox(),seats=await page.locator('.players-panel').boundingBox(),main=await page.locator('#piece-controls').boundingBox(),aux=await page.locator('.auxiliary-panel').boundingBox();
+      assert.ok(controls.y+controls.height<=seats.y);assert.ok(aux.y>=main.y+main.height+8);
+      assert.equal(await page.locator('#piece-controls #show-corners').count(),0);assert.equal(await page.locator('.auxiliary-panel #show-corners,.auxiliary-panel #export-replay,.auxiliary-panel #confirm-move').count(),3);
+      assert.equal(await page.locator('.player-state>span:first-child').nth(1).innerText(),'等待回合');
+      assert.equal(await page.locator('.player-state>span:first-child+.player-colors').count(),4);
+      assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+      if(width===390) {await page.evaluate(()=>scrollTo(0,0));await mkdir('artifacts/browser/ui-v2',{recursive:true});await page.screenshot({path:'artifacts/browser/ui-v2/phone-portrait-controls.png',fullPage:true});}
+    }
+    await page.setViewportSize({width:390,height:844});await page.locator('#board').scrollIntoViewIfNeeded();const shape=await page.locator('#preview').innerHTML();await page.locator('#floating-flip').tap();assert.notEqual(await page.locator('#preview').innerHTML(),shape);
+    await page.locator('#hint').tap();await page.waitForFunction(()=>document.querySelector('#hint-status').textContent.includes('方案'));await page.locator('#board').scrollIntoViewIfNeeded();await page.locator('#floating-confirm').tap();assert.equal(await page.locator('#move-number').innerText(),'1');
+  } finally {await browser.close();app.shutdown();await new Promise(r=>app.server.close(r));}
+});
+
+test('finished game announces winners once, closes for board inspection and rematches',async()=>{
+  const app=createApp();await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
+  const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
+  try {
+    const game=newGame(4);while(game.status==='playing') applyMove(game,findMove(game));
+    const record=exportReplay(game,['玩家 1','玩家 2','玩家 3','玩家 4']),page=await browser.newPage({viewport:{width:1366,height:768}});
+    await page.goto(`http://127.0.0.1:${app.server.address().port}`);await page.evaluate(record=>localStorage.setItem('djq-local-v1',JSON.stringify(record)),record);await page.reload();await page.locator('#resume-local').click();
+    await page.locator('#result-content').waitFor();assert.match(await page.locator('#result-content h3').innerText(),/获胜|平局/);assert.equal(await page.locator('.result-scores li').count(),4);
+    assert.equal(await page.locator('#piece-actions').isVisible(),false);assert.equal(await page.locator('.result-banner').count(),0);
+    await mkdir('artifacts/browser/ui-v2',{recursive:true});await page.screenshot({path:'artifacts/browser/ui-v2/result-dialog.png',fullPage:true});
+    await page.locator('#close-modal').click();assert.equal(await page.locator('#modal').isVisible(),false);
+    await page.locator('#theme-toggle').click();assert.equal(await page.locator('#modal').isVisible(),false,'ordinary renders do not reopen a dismissed result');
+    assert.equal((await page.locator('#confirm-move').innerText()).trim(),'再来一局');assert.equal(await page.locator('#confirm-move').isDisabled(),false);
+    await page.setViewportSize({width:844,height:390});await page.locator('#dock-pieces').click();assert.equal(await page.locator('#game-controls').isVisible(),true,'finished games still allow export and result inspection');
+    await page.locator('#result-button').click();await page.keyboard.press('Escape');assert.equal(await page.locator('#modal').isVisible(),false);assert.equal(await page.locator('#game-controls').isVisible(),true,'native result dialog handles Escape before drawer shortcuts');
+    await page.locator('#result-button').click();await page.locator('#rematch').click();assert.equal(await page.locator('#move-number').innerText(),'0');assert.equal(await page.locator('#modal').isVisible(),false);
+    await page.setViewportSize({width:1366,height:768});
+    await page.locator('#home-button').click();await page.evaluate(record=>localStorage.setItem('djq-local-v1',JSON.stringify(record)),record);await page.reload();await page.locator('#resume-local').click();await page.keyboard.press('Escape');
+    await page.locator('#confirm-move').click();assert.equal(await page.locator('#move-number').innerText(),'0');
+  } finally {await browser.close();app.shutdown();await new Promise(r=>app.server.close(r));}
+});
 
 test('selection, Enter/T shortcuts, merged confirmation and header history dialog',async()=>{
   const app=createApp();await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
