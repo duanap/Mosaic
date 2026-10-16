@@ -46,3 +46,5 @@ Seeds affect near-ties only, so many games may share deterministic opening lines
 Chromium touch simulation is not physical Android or iOS Safari. Check grabbing every solid region, holes, short tap, four edges, scrolling outside board, dock confirmation, orientation changes and cancellation/multiple fingers on actual devices. Record device/browser and outcomes. Repeat bot/team/recovery flows through actual HTTPS/reverse proxy/CDN. Local validation does not deploy or verify production infrastructure.
 
 The lobby suite covers cancel-without-creating, native form validation and inline server errors, local bots, invitation-prefilled joining, waiting-only dialogs, close/reopen/reload, host transfer, last-human cleanup, prevented duplicate creation, and blocking save/import switching while attached to a room.
+
+A mobile-emulated CDP drag followed by the very first touchscreen hint/confirm tap is a regression case. The same case verifies one toggle per tap and no button activation during swipe scrolling.

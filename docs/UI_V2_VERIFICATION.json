@@ -2,7 +2,7 @@
   "date": "2026-10-17",
   "feature": "Match UI 2.0 and lobby dialogs",
   "baseCommit": "fb73d1b8275fdd563010fce3ed4a3fd613ed2855",
-  "branch": "feat/game-ui-v2-landscape",
+  "branch": "codex/fix-touch-controls",
   "native": {
     "command": "npm run verify",
     "passed": 70,
@@ -12,12 +12,12 @@
   },
   "browser": {
     "command": "npm run test:browser",
-    "passed": 38,
+    "passed": 39,
     "failed": 0,
     "engine": "Installed Edge/Chromium headless",
     "mode": "Actual loopback HTTP/SSE, native storage, CSP, module workers and CDP touch",
-    "log": "artifacts/lobby-browser-full.log",
-    "additionalCheck": "artifacts/lobby-menus-final.log"
+    "log": "artifacts/touch-browser-final.log",
+    "additionalCheck": "artifacts/touch-controls-final.log"
   },
   "viewports": [
     {
@@ -120,7 +120,10 @@
     "invitation opens prefilled join menu",
     "attached room blocks competing setup/import/recovery entry points",
     "auto-height inventory and selection cards with shortcuts inside preview",
-    "borderless floating action container; export only after game end"
+    "borderless floating action container; export only after game end",
+    "first touchscreen hint/confirm tap after a mobile SVG drag",
+    "compatibility click deduplication across replaced buttons",
+    "touch scroll and cancellation never activate controls"
   ],
   "unchanged": [
     "shared rules/strategy",

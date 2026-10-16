@@ -67,6 +67,7 @@ test('finished game announces winners once, closes for board inspection and rema
     assert.equal((await page.locator('#confirm-move').innerText()).trim(),'再来一局');assert.equal(await page.locator('#confirm-move').isDisabled(),false);
     for(const [width,height] of [[1366,768],[844,390],[390,844]]) {
       await page.setViewportSize({width,height});
+      await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
       assert.equal(await page.locator('#undo,#result-button,.mobile-dock').count(),0,'finished game removes undo, result shortcut and bottom dock');
       assert.equal(await page.locator('#game-controls').isVisible(),true);assert.equal(await page.locator('#confirm-move').isEnabled(),true);
       if(width===844) {await page.locator('#confirm-move').scrollIntoViewIfNeeded();const confirm=await page.locator('#confirm-move').boundingBox();assert.ok(confirm.y>=0&&confirm.y+confirm.height<=height,'main rematch remains on screen without a bottom dock');await page.screenshot({path:'artifacts/browser/ui-v2/phone-landscape-finished.png',fullPage:true});}
@@ -133,4 +134,25 @@ test('online confirmation resists repeated Enter and the history modal receives 
     await b.keyboard.press('Escape');await b.locator('#hint').focus();await b.keyboard.press('Enter');await b.waitForFunction(()=>!document.querySelector('#confirm-move').disabled);
     assert.equal(await b.locator('#move-number').innerText(),'1');await b.keyboard.press('Enter');await a.waitForFunction(()=>document.querySelector('#move-number').textContent==='2');
   } finally {release?.();await browser.close();app.shutdown();await new Promise(r=>app.server.close(r));}
+});
+
+test('mobile drag completion preserves the next touchscreen button activation',async()=>{
+  const app=createApp();await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
+  const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
+  try {
+    const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true}),page=await context.newPage();page.setDefaultTimeout(10000);
+    await page.goto(`http://127.0.0.1:${app.server.address().port}`);await startLocal(page);await page.locator('[data-piece="F5"]').tap();await page.locator('#board').scrollIntoViewIfNeeded();
+    const p=await page.locator('#preview rect').last().boundingBox(),board=await page.locator('#board').boundingBox(),x=p.x+p.width/2,y=p.y+p.height/2,dx=board.width/5,cdp=await context.newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y,id:1}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x+dx,y:y+dx,id:1}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    await page.locator('#hint').tap();await page.waitForFunction(()=>document.querySelector('#hint-status').textContent.includes('方案'));
+    await page.locator('#board').scrollIntoViewIfNeeded();await page.locator('#floating-confirm').tap();assert.equal(await page.locator('#move-number').innerText(),'1');
+    await page.locator('#show-corners').tap();assert.equal(await page.locator('#show-corners').getAttribute('aria-pressed'),'true','one tap toggles once despite compatibility clicks');
+    await page.locator('#show-corners').tap();assert.equal(await page.locator('#show-corners').getAttribute('aria-pressed'),'false');
+    const button=await page.locator('#show-corners').boundingBox(),tx=button.x+button.width/2,ty=button.y+button.height/2;
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:tx,y:ty,id:1}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:tx,y:ty-40,id:1}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    assert.equal(await page.locator('#show-corners').getAttribute('aria-pressed'),'false','swiping controls only scrolls');
+    await page.locator('#show-corners').scrollIntoViewIfNeeded();const cancelled=await page.locator('#show-corners').boundingBox();
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:cancelled.x+cancelled.width/2,y:cancelled.y+cancelled.height/2,id:1}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});
+    assert.equal(await page.locator('#show-corners').getAttribute('aria-pressed'),'false','cancelled touch never activates controls');
+  } finally {await browser.close();app.shutdown();await new Promise(r=>app.server.close(r));}
 });
