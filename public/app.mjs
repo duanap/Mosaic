@@ -424,10 +424,14 @@ async function handleButton(button) {
   else if(id==='import-replay') $('#import-file').click();
   else if(id==='replay-prev'||id==='replay-next') setReplayStep(ui.replayStep+(id==='replay-next'?1:-1));
 }
-let suppressClickUntil=0,drag=null;
+let suppressClickUntil=0,drag=null,controlTouch=null;
+const touchClicks=new Map();
+const touchActionKey=button=>button?.id||button?.dataset.action||`piece:${button?.dataset.piece}`;
 $('#app').addEventListener('click',event=>{
   if(Date.now()<suppressClickUntil&&event.target.closest('#board,[data-piece]')) return;
-  const button=event.target.closest('button');if(button&&!button.disabled) handleButton(button).catch(error=>toast(t(error.message)));
+  const button=event.target.closest('button');
+  if(event.isTrusted&&event.detail>0&&touchClicks.get(touchActionKey(button))>Date.now()) return;
+  if(button&&!button.disabled) handleButton(button).catch(error=>toast(t(error.message)));
 });
 $('#modal').addEventListener('click',event=>{
   if(event.target.closest('#close-modal')||event.target===$('#modal')) {if(!ui.pending){captureOptions();ui.menu=null;$('#modal').close();}}
@@ -471,6 +475,26 @@ function finishGesture(event,cancelled=false) {
   setPreview(result.rotate?rotatePreview(result.move,gesture.pivot):result.move);
   suppressClickUntil=Date.now()+350;render();
 }
+// Activate stationary touch controls once, without relying on a compatibility click
+// after an SVG drag. Scroll gestures and pointer cancellation never activate a button.
+$('#app').addEventListener('pointerdown',event=>{
+  if(event.pointerType!=='touch') return;
+  if(!event.isPrimary) {controlTouch=null;return;}
+  if(ui.view!=='game'||$('#modal').open) return;
+  const button=event.target.closest('.controls-column button,.mobile-dock button,.piece-actions button');
+  if(button&&!button.disabled) controlTouch={button,id:event.pointerId,x:event.clientX,y:event.clientY};
+});
+document.addEventListener('pointermove',event=>{
+  if(controlTouch?.id===event.pointerId&&Math.hypot(event.clientX-controlTouch.x,event.clientY-controlTouch.y)>8) controlTouch=null;
+});
+document.addEventListener('pointerup',event=>{
+  if(controlTouch?.id!==event.pointerId) return;
+  const {button,x,y}=controlTouch;controlTouch=null;
+  if(!button.isConnected||button.disabled||Math.hypot(event.clientX-x,event.clientY-y)>8) return;
+  touchClicks.set(touchActionKey(button),Date.now()+700);button.click();
+});
+document.addEventListener('pointercancel',()=>{controlTouch=null;});
+window.addEventListener('blur',()=>{controlTouch=null;});
 document.addEventListener('pointerup',event=>finishGesture(event));
 document.addEventListener('pointercancel',event=>finishGesture(event,true));
 document.addEventListener('lostpointercapture',event=>finishGesture(event,true));
