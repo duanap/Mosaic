@@ -1,4 +1,10 @@
 const words = {
+ colorSuffix:'色',mirrored:'镜像',noSelection:'尚未选择',selectionHelp:'从上方选择一块棋子',
+ currentPiece:'当前选中棋子',shapeInventory:'21 种真实棋形',available:'当前可用',used:'已使用',
+ gameNavigation:'对局导航',closePieces:'收起操作面板',thinking:'思考中',currentTurn:'当前回合',
+ neutralRotation:'主色已结束 · 公共绿轮换',colorEnded:'本色已结束',waitingTurn:'等待回合',
+ robot:'机器人',human:'真人',team:'队',calculating:'计算中',submitting:'提交中',playersTitle:'对局玩家',
+ gameActions:'对局操作',boardTitle:'棋盘',boardGesture:'按住拖动 · 点击旋转',
  perColor:'每色',
  title:'角斗士棋',
  hero:'一角相连，<br>步步为营。',

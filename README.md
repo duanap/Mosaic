@@ -34,6 +34,8 @@ npm run build   # 生成 dist/，其中也可直接 npm start
 
 ## 架构
 
+本分支包含 **对局 UI 2.0**：桌面三栏、实际宽高自适应棋盘、当前棋子放大预览、手机短横屏操作抽屉和深浅色主题。规则、机器人和房间协议保持原有实现。查看[交付说明与真实截图](docs/UI_V2.md)。
+
 原生 JavaScript ES Modules + SVG + Node.js HTTP + 经认证的 fetch/SSE。轻量回合制联机不引入 WebSocket 依赖；规则引擎独立于 UI，客户端只提交落子意图。
 
 ```text

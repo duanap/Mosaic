@@ -16,7 +16,9 @@ $env:CHROMIUM_PATH = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.e
 npm run test:browser
 ```
 
-Both `tests/browser_gameplay.mjs` and `tests/browser_recovery.mjs` start real local servers on ephemeral ports, with actual CSP, native storage, HTTP/SSE and module Workers. Current acceptance uses no bridge or emulated storage. Optional browser packages are not production dependencies.
+`tests/browser_gameplay.mjs`, `tests/browser_recovery.mjs`, and `tests/browser_layout.mjs` start real local servers on ephemeral ports, with actual CSP, native storage, HTTP/SSE and module Workers. Current acceptance uses no bridge or emulated storage. Optional browser packages are not production dependencies.
+
+The UI 2.0 layout suite checks nine real viewport sizes (1920×1080 through 360×800), full desktop three-column fit, square SVG bounds, selected-shape synchronization, actual export downloads, all local modes, invalid-move confirmation, keyboard focus, narrow landscape drawer/inert/focus wrapping, orientation changes, read-only replay and captured drag surviving an SSE presence update. See [UI 2.0 delivery](UI_V2.md) and [its verification report](UI_V2_VERIFICATION.json). Screenshots in `docs/screenshots/ui-v2/` are committed review artifacts; other screenshots/logs remain ignored under artifacts/.
 
 Coverage: hover/held drag/tap rotation; multi-square non-origin grabbing; native Chromium CDP touch and cancellation rollback; bounds/flip/arrows; manual four-color opening; focused Enter; dark theme; hint cycling; local full bot game/undo/reload/rematch; 3/4 human online and neutral green; team game with 2 humans/2 bots; team resignation/rematch; safe/invalid V1 replay import; native recovery, browser restart, multi-tab Web Locks, and temporary failures. Screenshots: ignored `artifacts/browser/`.
 

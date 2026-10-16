@@ -1,0 +1,109 @@
+{
+  "date": "2026-10-16",
+  "feature": "Match UI 2.0",
+  "baseCommit": "fb73d1b8275fdd563010fce3ed4a3fd613ed2855",
+  "branch": "feat/game-ui-v2-landscape",
+  "native": {
+    "command": "npm run verify",
+    "passed": 68,
+    "failed": 0,
+    "modules": 32,
+    "build": true
+  },
+  "browser": {
+    "command": "npm run test:browser",
+    "passed": 29,
+    "failed": 0,
+    "engine": "Installed Edge/Chromium headless",
+    "mode": "Actual loopback HTTP/SSE, native storage, CSP, module workers and CDP touch",
+    "log": "artifacts/ui-v2-browser-final.log"
+  },
+  "viewports": [
+    {
+      "width": 1920,
+      "height": 1080,
+      "board": 869,
+      "threeColumns": true
+    },
+    {
+      "width": 1600,
+      "height": 900,
+      "board": 689,
+      "threeColumns": true
+    },
+    {
+      "width": 1366,
+      "height": 768,
+      "board": 557,
+      "threeColumns": true
+    },
+    {
+      "width": 1280,
+      "height": 800,
+      "board": 589,
+      "threeColumns": true
+    },
+    {
+      "width": 1024,
+      "height": 768,
+      "board": 466,
+      "threeColumns": true
+    },
+    {
+      "width": 844,
+      "height": 390,
+      "board": 254,
+      "threeColumns": false
+    },
+    {
+      "width": 932,
+      "height": 430,
+      "board": 294,
+      "threeColumns": false
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "board": 344,
+      "threeColumns": false
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "board": 314,
+      "threeColumns": false
+    }
+  ],
+  "checks": [
+    "three columns and no whole-page desktop scroll",
+    "square full SVG bounds",
+    "actual 21-piece inventory",
+    "selected rotation/reflection synchronized",
+    "duo/trio/classic/teams and live scores",
+    "disabled illegal confirmation",
+    "actual replay export download",
+    "captured drag survives SSE presence updates",
+    "keyboard focus, Esc and modal drawer focus wrap",
+    "orientation changes and inert restoration",
+    "readonly replay and keyboard range navigation",
+    "full local bot game, online bots/teams, undo/rematch and persistent recovery"
+  ],
+  "unchanged": [
+    "shared rules/strategy",
+    "server rooms/bots/auth/protocol",
+    "network recovery",
+    "placement geometry"
+  ],
+  "screenshots": [
+    "docs/screenshots/ui-v2/desktop-light-midgame.png",
+    "docs/screenshots/ui-v2/desktop-dark-midgame.png",
+    "docs/screenshots/ui-v2/phone-landscape-drawer.png"
+  ],
+  "notVerified": [
+    "physical Android/iOS Safari",
+    "other physical browsers",
+    "production domain deployment"
+  ],
+  "review": "Author self-review; independent review not claimed",
+  "delivery": "Feature branch for review; main not merged; production not updated"
+}

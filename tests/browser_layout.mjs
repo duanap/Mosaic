@@ -1,0 +1,135 @@
+/** Real game layout and accessibility regression tests, using HTTP and module workers. */
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { createApp } from '../server/index.mjs';
+import { newGame, applyMove, findMove, exportReplay } from '../shared/rules.mjs';
+const {chromium}=createRequire(import.meta.url)(process.env.DJQ_PLAYWRIGHT_MODULE||'playwright');
+const viewports=[[1920,1080],[1600,900],[1366,768],[1280,800],[1024,768],[844,390],[932,430],[390,844],[360,800]];
+
+test('UI 2.0 fits actual games across desktop tablet and phone sizes',async t=>{
+  const app=createApp();await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
+  const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
+  const measurements=[];
+  try {
+    await mkdir('artifacts/browser/ui-v2',{recursive:true});
+    for(const [width,height] of viewports) await t.test(`${width}x${height}`,async()=>{
+      const context=await browser.newContext({viewport:{width,height},hasTouch:width<1000}),page=await context.newPage(),errors=[];
+      try {
+        page.setDefaultTimeout(15000);
+        page.on('pageerror',e=>errors.push(e.message));await page.goto(`http://127.0.0.1:${app.server.address().port}`);await page.locator('#local-start').click();
+        await page.locator('.players-panel').waitFor();
+        await page.waitForFunction(()=>{const b=document.querySelector('#board').getBoundingClientRect();return Math.abs(b.width-b.height)<1&&b.width>150;});
+        const b=await page.locator('#board').boundingBox(),left=await page.locator('.players-panel').boundingBox(),right=await page.locator('.control-panel').boundingBox();
+        assert.ok(Math.abs(b.width-b.height)<1);assert.ok(b.x>=0&&b.x+b.width<=width+1);assert.ok(b.y>=0&&b.y+b.height<=height+1);
+        assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+        assert.equal(await page.locator('.player-card').count(),4);assert.equal(await page.locator('[data-piece]').count(),21);
+        assert.equal(await page.locator('#selected-piece-preview').count(),1);assert.match(await page.locator('.player-card').first().innerText(),/-89/);
+        if(width>=1024&&height>=600) {
+          assert.ok(left.x+left.width<=b.x,'players on the left');assert.ok(right.x>=b.x+b.width,'controls on the right');
+          const confirm=await page.locator('#confirm-move').boundingBox();assert.ok(confirm.y>=0&&confirm.y+confirm.height<=height+1);
+          assert.ok(await page.evaluate(()=>document.documentElement.scrollHeight<=innerHeight+1),'desktop has no whole-page scroll');
+        }
+        const compact=width>height&&height<=560;
+        if(compact) {await page.locator('#dock-pieces').click();await page.locator('#game-controls').waitFor({state:'visible'});}
+        await page.locator('[data-piece="F5"]').click();
+        if(compact) await page.locator('#dock-pieces').click();
+        const shape=await page.locator('#selected-piece-preview').innerHTML();assert.match(await page.locator('#selected-piece-meta').innerText(),/F5/);
+        await page.locator('#rotate').click();assert.notEqual(await page.locator('#selected-piece-preview').innerHTML(),shape);
+        await page.locator('#flip').click();assert.equal(await page.locator('#selected-piece-preview rect').count(),5);
+        if(compact&&await page.locator('#close-pieces').isVisible()) await page.locator('#close-pieces').click();
+        await page.locator('#board').focus();await page.keyboard.press('Escape');
+        assert.equal(await page.locator('#preview rect').count(),0);assert.equal(await page.locator('#selected-piece-preview rect').count(),0);
+        if(compact) await page.locator('#dock-pieces').click();
+        await page.locator('#hint').click();await page.waitForFunction(()=>document.querySelector('#preview-status').textContent.includes('方案'));
+        if(compact&&await page.locator('#close-pieces').isVisible()) await page.locator('#close-pieces').click();
+        await page.locator(width<=760||compact?'[data-action="confirm-move"]':'#confirm-move').click();
+        assert.equal(await page.locator('#move-number').innerText(),'1');
+        if(compact) await page.locator('#dock-pieces').click();
+        await page.locator('[data-piece="I5"]').click();if(compact) await page.locator('#dock-pieces').click();
+        await page.locator('#show-corners').click();assert.equal(await page.locator('#show-corners').getAttribute('aria-pressed'),'true');
+        const downloadPromise=page.waitForEvent('download');await page.locator('#export-replay').click();const download=await downloadPromise;assert.match(download.suggestedFilename(),/\.json$/);
+        if(compact) await page.locator('#close-pieces').click();
+        await page.locator('#board').focus();await page.keyboard.press('Escape');await page.evaluate(()=>window.scrollTo(0,0));
+        if(width===1920||compact||width===390) await page.screenshot({path:`artifacts/browser/ui-v2/light-${width}x${height}.png`,fullPage:true});
+        await page.locator('#theme-toggle').click();assert.equal(await page.locator('html').getAttribute('data-theme'),'dark');
+        if(width===1920) await page.screenshot({path:'artifacts/browser/ui-v2/dark-1920x1080.png',fullPage:true});
+        measurements.push({width,height,board:Math.round(b.width),threeColumns:width>=1024&&height>=600});assert.deepEqual(errors,[]);
+      } finally {await context.close();}
+    });
+    await writeFile('artifacts/browser/ui-v2/measurements.json',JSON.stringify(measurements,null,2));
+  } finally {await browser.close();app.shutdown();await new Promise(r=>app.server.close(r));}
+});
+
+test('presence snapshots preserve captured drag while the new layout defers rendering',async()=>{
+  const app=createApp({creationLimit:100,requestLimit:2000});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
+  const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
+  try {
+    const a=await browser.newPage({viewport:{width:1366,height:768}}),b=await browser.newPage(),base=`http://127.0.0.1:${app.server.address().port}`;
+    await a.goto(base);await a.locator('#mode-2').click();await a.locator('#create-room').click();const code=await a.locator('#room-code').innerText();
+    await b.goto(base);await b.locator('#room-code-input').fill(code);await b.locator('#join-room').click();await a.locator('#online-start').click();
+    await a.locator('[data-piece="F5"]').click();const board=await a.locator('#board').boundingBox(),cell=board.width/20,last=await a.locator('#preview rect').last().boundingBox(),x=last.x+last.width/2,y=last.y+last.height/2;
+    await a.evaluate(()=>{window.testCapturedBoard=document.querySelector('#board');});
+    await a.mouse.move(x,y);await a.mouse.down();await a.mouse.move(x+cell*2,y+cell*2,{steps:3});
+    await b.close();const end=Date.now()+3000;while(app.store.snapshot(code).players[1].connected) {assert.ok(Date.now()<end);await new Promise(r=>setTimeout(r,10));}
+    await a.waitForTimeout(50);assert.equal(await a.evaluate(()=>document.querySelector('#board')===window.testCapturedBoard),true);
+    const before=await a.locator('#preview').innerHTML();await a.mouse.move(x+cell*3,y+cell*3,{steps:3});assert.notEqual(await a.locator('#preview').innerHTML(),before);
+    await a.mouse.up();assert.equal(await a.locator('#preview rect').count(),5);assert.equal(await a.locator('#move-number').innerText(),'0');
+    await a.waitForFunction(()=>document.querySelector('[data-player="1"] .player-state').textContent.includes('离线'));
+  } finally {await browser.close();app.shutdown();await new Promise(r=>app.server.close(r));}
+});
+
+test('UI 2.0 keeps modes, disabled states, replay, drawer focus and rotation changes coherent',async t=>{
+  const app=createApp();await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
+  const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
+  try {
+    const context=await browser.newContext({viewport:{width:1366,height:768}}),page=await context.newPage(),errors=[];
+    page.setDefaultTimeout(15000);page.on('pageerror',e=>errors.push(e.message));
+    const base=`http://127.0.0.1:${app.server.address().port}`;await page.goto(base);
+    for(const count of [2,3,4]) {
+      await page.locator('#mode-'+count).click();if(count===4) await page.locator('#game-mode').selectOption('teams');
+      await page.locator('#local-start').click();assert.equal(await page.locator('.player-card').count(),count);
+      assert.match(await page.locator('.player-card').first().innerText(),count===2?/-178/ : /-89/);
+      assert.equal(await page.locator('.neutral-bar').count(),count===3?1:0);assert.equal(await page.locator('.team-cards article').count(),count===4?2:0);
+      await page.locator('[data-piece="F5"]').click();assert.equal(await page.locator('#confirm-move').isDisabled(),true,'F5 base orientation does not cover the starting corner');
+      await page.locator('#board').focus();const shape=await page.locator('#selected-piece-preview').innerHTML();
+      await page.keyboard.press('r');assert.notEqual(await page.locator('#selected-piece-preview').innerHTML(),shape);
+      assert.equal(await page.locator('#board').evaluate(n=>n===document.activeElement),true,'rotation preserves board keyboard focus');
+      const rotated=await page.locator('#selected-piece-preview').innerHTML();await page.keyboard.press('f');assert.notEqual(await page.locator('#selected-piece-preview').innerHTML(),rotated);
+      await page.keyboard.press('Escape');assert.equal(await page.locator('#preview rect').count(),0);
+      await page.locator('#hint').click();await page.locator('#confirm-move').click();assert.equal(await page.locator('#move-number').innerText(),'1');
+      if(await page.locator('#game-history').getAttribute('open')===null) await page.locator('#game-history summary').click();
+      assert.equal(await page.locator('#game-history').getAttribute('open'),'');
+      await page.locator('#theme-toggle').click();assert.equal(await page.locator('#game-history').getAttribute('open'),'','log expansion survives rerenders');
+      await page.locator('#undo').click();assert.equal(await page.locator('#move-number').innerText(),'0');
+      await page.locator('#home-button').click();
+    }
+    // Use a validated real midgame history for screenshots, not decorative board cells.
+    const game=newGame(4);for(let i=0;i<36;i++) applyMove(game,findMove(game));
+    const record=exportReplay(game,['玩家 1','玩家 2','玩家 3','玩家 4']);
+    await page.evaluate(record=>localStorage.setItem('djq-local-v1',JSON.stringify(record)),record);await page.reload();await page.locator('#resume-local').click();
+    await page.setViewportSize({width:1920,height:1080});
+    await page.locator('#hint').click();await page.waitForFunction(()=>!document.querySelector('#confirm-move').disabled);await page.locator('#game-history summary').click();
+    if(await page.locator('html').getAttribute('data-theme')==='dark')await page.locator('#theme-toggle').click();
+    await page.screenshot({path:'artifacts/browser/ui-v2/desktop-light-midgame.png',fullPage:true});
+    await page.locator('#theme-toggle').click();await page.screenshot({path:'artifacts/browser/ui-v2/desktop-dark-midgame.png',fullPage:true});
+    await page.setViewportSize({width:844,height:390});
+    await page.locator('#dock-pieces').click();assert.equal(await page.locator('#game-controls').getAttribute('aria-modal'),'true');
+    assert.equal(await page.locator('.board-section').evaluate(n=>n.inert),true);
+    await page.keyboard.press('Shift+Tab');assert.equal(await page.locator('#confirm-move').evaluate(n=>n===document.activeElement),true,'focus wraps inside the drawer');
+    await page.keyboard.press('Escape');assert.equal(await page.locator('#dock-pieces').evaluate(n=>n===document.activeElement),true);
+    const moveBefore=await page.locator('#preview').innerHTML();await page.locator('[data-action="rotate"]').click();assert.notEqual(await page.locator('#preview').innerHTML(),moveBefore);
+    await page.locator('#dock-pieces').click();await page.screenshot({path:'artifacts/browser/ui-v2/phone-landscape-drawer.png',fullPage:true});
+    await page.setViewportSize({width:390,height:844});assert.equal(await page.locator('#game-controls').getAttribute('aria-modal'),null);
+    const board=await page.locator('#board').boundingBox();assert.ok(Math.abs(board.width-board.height)<1);
+    await page.setViewportSize({width:844,height:390});assert.equal(await page.locator('#game-controls').isVisible(),false,'rotation closes a stale drawer');
+    await page.locator('#home-button').click();
+    await page.locator('#import-file').setInputFiles({name:'replay.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(record))});
+    await page.locator('[data-action="replay-next"]').click();assert.equal(await page.locator('#move-number').innerText(),'1');
+    await page.locator('#dock-pieces').click();assert.equal(await page.locator('[data-piece]').count(),0,'replay has no editable inventory');
+    await page.locator('#replay-range').focus();await page.keyboard.press('Home');
+    for(let n=0;n<10;n++) await page.keyboard.press('ArrowRight');assert.equal(await page.locator('#move-number').innerText(),'10');
+    assert.deepEqual(errors,[]);await context.close();
+  } finally {await browser.close();app.shutdown();await new Promise(r=>app.server.close(r));}
+});
