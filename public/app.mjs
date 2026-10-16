@@ -21,11 +21,12 @@ let botGeneration=0,botKey=null;
 const announcedLocalResults=new WeakSet(),announcedOnlineResults=new Set();
 const ui={view:'home',mode:'local',count:4,variant:'classic',seatKinds:['human','human','human','human'],scoring:'bonus',seconds:90,name:read('djq-name',`${t('player')}${Math.floor(Math.random()*900)+100}`),
   joinCode:new URLSearchParams(location.search).get('room')?.toUpperCase().slice(0,6)??'',
-  piecesOpen:false,game:null,room:null,names:[],selected:null,orientation:0,cursor:null,showCorners:false,pending:false,connected:false,
+  menu:null,piecesOpen:false,game:null,room:null,names:[],selected:null,orientation:0,cursor:null,showCorners:false,pending:false,connected:false,
   replayRecord:null,replayStep:0,clockOffset:0,recoveries:[],theme:read('djq-theme',matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')};
 if(!['dark','light'].includes(ui.theme)) ui.theme='light';
 document.documentElement.dataset.theme=ui.theme;
 const icons={
+ home:'<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1V10Z"/>',
  arrow:'<path d="M5 12h14m-6-6 6 6-6 6"/>',back:'<path d="m10 6-6 6 6 6M4 12h16"/>',
  moon:'<path d="M20 14A8.5 8.5 0 0 1 10 4 8.5 8.5 0 1 0 20 14Z"/>',
  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>',
@@ -68,7 +69,7 @@ function header() {
   const match=(ui.view==='game'||ui.view==='replay')&&ui.game;
   return `<header class="site-header ${match?'match-header':''}"><button id="home-button" class="brand" aria-label="${t('home')}"><span class="brand-mark"><i></i><i></i><i></i><i></i></span><strong>${t('title')}</strong><span class="brand-label">DJQ <small>v${APP_VERSION}</small></span></button>
   ${match?`<div class="match-context"><strong>${t(ui.view==='replay'?'replay':ui.mode)}</strong><span>${ui.game.players} ${t('people')} / ${modeLabel(ui.game)} / ${t(ui.game.scoring)}${ui.mode==='online'&&ui.room?` / ${ui.room.code}`:''}</span>${ui.view==='game'&&ui.mode==='online'&&ui.game.status==='playing'?'<span id="countdown" class="countdown" aria-label="回合剩余时间"></span>':''}</div>`:''}
-  <nav aria-label="${t('gameNavigation')}"><button id="rules-button" class="text-button" aria-label="${t('rules')}">${icon('help')}<span>${t('rules')}</span></button>${match?`<button id="log-button" class="text-button" aria-label="${t('log')}">${icon('history')}<span>${t('log')}</span></button>`:''}${match?`<button id="leave-room" class="text-button" aria-label="${t('home')}">${icon('back')}<span>${t('home')}</span></button>`:`<a class="github-link" href="https://github.com/duanap/Mosaic" target="_blank" rel="noopener noreferrer">GitHub ${icon('arrow')}</a>`}<button id="theme-toggle" class="icon-button" aria-label="${t('theme')}">${icon(ui.theme==='dark'?'sun':'moon')}</button></nav></header>`;
+  <nav aria-label="${t('gameNavigation')}"><button id="rules-button" class="text-button" aria-label="${t('rules')}">${icon('help')}<span>${t('rules')}</span></button>${match?`<button id="log-button" class="text-button" aria-label="${t('log')}">${icon('history')}<span>${t('log')}</span></button>`:''}${match?`<button id="leave-room" class="text-button" aria-label="${t('home')}">${icon('home')}<span>${t('home')}</span></button>`:`<a class="github-link" href="https://github.com/duanap/Mosaic" target="_blank" rel="noopener noreferrer">GitHub ${icon('arrow')}</a>`}<button id="theme-toggle" class="icon-button" aria-label="${t('theme')}">${icon(ui.theme==='dark'?'sun':'moon')}</button></nav></header>`;
 }
 const miniPiece=pieceSVG;
 function boardSVG(game,interactive=true) {
@@ -83,20 +84,43 @@ const demo=newGame(4);for(let n=0;n<32;n++) applyMove(demo,findMove(demo));
 function recoveryView() {
   ui.recoveries=savedSessions();
   if(!ui.recoveries.length) return '';
-  return `<section class="recovery-section" aria-labelledby="recovery-title"><h2 id="recovery-title">${t('recoverSeat')}</h2><p>${t('recoverHelp')}</p><div class="recovery-actions">${ui.recoveries.map((s,i)=>`<button class="button secondary" data-recover="${i}"${busy()}>${icon('back')}<span>${escape(s.name||t('player'))} / ${s.code}${s.seat===null?'':` / ${t('seat')} ${s.seat+1}`}</span></button>`).join('')}</div></section>`;
+  return `<section class="recovery-section" aria-labelledby="recovery-title"><h2 id="recovery-title">${t('recoverSeat')}</h2><p>${t('recoverHelp')}</p><div class="recovery-actions">${ui.recoveries.map((s,i)=>`<button class="button secondary" data-recover="${i}"${busy()} ${ui.room?'disabled':''}>${icon('back')}<span>${escape(s.name||t('player'))} / ${s.code}${s.seat===null?'':` / ${t('seat')} ${s.seat+1}`}</span></button>`).join('')}</div></section>`;
 }
 function homeView() {
   return `<main class="home-shell"><section class="hero"><div class="hero-copy"><h1>${t('hero')}</h1><p class="lead">${t('intro')}</p><div class="quick-rules">${[1,2,3].map(n=>`<span><b>0${n}</b>${t('tip'+n)}</span>`).join('')}</div></div>
   <div class="hero-art"><div class="art-orbit"></div><div class="hero-board-wrap">${boardSVG(demo,false)}</div><div class="art-tag"><span class="tag-block">21</span><span>${t('tiles')} / ${t('perColor')}</span></div></div></section>
-  <section class="play-section"><div class="section-heading"><div><h2>${t('chooseMode')}</h2></div><div class="mode-switch" aria-label="${t('chooseMode')}">${[2,3,4].map(n=>`<button id="mode-${n}" data-count="${n}" class="${ui.count===n?'selected':''}" aria-pressed="${ui.count===n}"><strong>${n}<small>${t('people')}</small></strong><span>${t('mode'+n)}</span></button>`).join('')}</div></div>
-  ${modeSettings()}<div class="play-cards"><article class="play-card local-card"><div class="card-top"><span class="card-icon">${icon('users')}</span></div><h3>${t('localTitle')}</h3><p>${t('localDesc')}</p>${localSeats()}<label class="inline-field">${t('scoring')}<select id="scoring"><option value="bonus" ${ui.scoring==='bonus'?'selected':''}>${t('bonus')} +15 / +20</option><option value="simple" ${ui.scoring==='simple'?'selected':''}>${t('simple')}</option></select></label><button id="local-start" class="button primary wide">${t('localStart')}${icon('arrow')}</button>${read(LOCAL)?`<button id="resume-local" class="text-button resume">${t('resume')}${icon('back')}</button>`:''}</article>
-  <article class="play-card online-card"><div class="card-top"><span class="card-icon">${icon('link')}</span></div><h3>${t('onlineTitle')}</h3><p>${t('onlineDesc')}</p><div class="online-fields"><label>${t('name')}<input id="player-name" maxlength="20" autocomplete="nickname" value="${escape(ui.name)}"></label><label>${t('turnLimit')}<select id="turn-seconds">${[30,60,90,120].map(n=>`<option value="${n}" ${ui.seconds===n?'selected':''}>${n} ${t('seconds')}</option>`).join('')}</select></label></div><div class="online-actions"><button id="create-room" class="button secondary"${busy()}>${t('create')}${icon('arrow')}</button><div class="join-field"><input id="room-code-input" maxlength="6" autocomplete="off" aria-label="${t('code')}" placeholder="${t('code')}" value="${escape(ui.joinCode)}"><button id="join-room" class="text-button"${busy()}>${t('join')}</button></div></div></article></div></section>
-  ${recoveryView()}<footer class="home-footer"><span>${t('footer')}</span><button id="import-replay" class="text-button">${t('import')}${icon('arrow')}</button></footer></main>`;
+  <section class="play-section"><div class="section-heading"><h2>选择玩法</h2></div>
+  ${ui.room?`<div class="active-room panel"><div><strong>你已在房间 ${ui.room.code}</strong><p>关闭菜单不会退出房间，可以随时返回等候室。</p></div><button id="return-room" class="button primary">返回房间${icon('arrow')}</button><button id="home-leave-room" data-action="leave-room" class="text-button">退出房间</button></div>`:''}
+  <div class="entry-grid">${[
+    ['local','users','同屏玩法','在同一台设备上轮流操作，可与朋友或人机对战。'],
+    ['create','link','创建房间','设置人数与玩法，邀请朋友或添加人机后开始。'],
+    ['join','arrow','加入房间','输入邀请码，加入朋友的房间。']
+  ].map(([mode,glyph,title,description])=>`<button id="open-${mode}" data-menu="${mode}" class="entry-card panel" ${ui.room?'disabled':''}><span class="card-icon">${icon(glyph)}</span><strong>${title}</strong><span>${description}</span><span class="entry-arrow" aria-hidden="true">${icon('arrow')}</span></button>`).join('')}</div>
+  ${read(LOCAL)?`<button id="resume-local" class="text-button resume" ${ui.room?'disabled':''}>${t('resume')}${icon('back')}</button>`:''}</section>
+  ${recoveryView()}<footer class="home-footer"><span>${t('footer')}</span><button id="import-replay" class="text-button" ${ui.room?'disabled':''}>${t('import')}${icon('arrow')}</button></footer></main>`;
 }
 function connectionLabel() {return `<span id="connection" class="connection ${ui.connected?'connected':''}"><i></i>${t(ui.connected?'connected':'reconnecting')}</span>`;}
-function lobbyView() {
+function setupMenu(mode) {
+  if(mode==='room') return roomMenu();
+  const local=mode==='local',join=mode==='join';
+  const modes=`<div class="setup-modes" aria-label="选择人数">${[2,3,4].map(n=>`<button type="button" id="mode-${n}" data-count="${n}" class="${ui.count===n?'selected':''}" aria-pressed="${ui.count===n}"><strong>${n}人</strong><span>${t('mode'+n)}</span></button>`).join('')}</div>${modeSettings()}`;
+  const name=`<label>${t('name')}<input id="player-name" required maxlength="20" autocomplete="nickname" value="${escape(ui.name)}"></label>`;
+  const scoring=`<label class="inline-field">${t('scoring')}<select id="scoring"><option value="bonus" ${ui.scoring==='bonus'?'selected':''}>${t('bonus')} +15 / +20</option><option value="simple" ${ui.scoring==='simple'?'selected':''}>${t('simple')}</option></select></label>`;
+  return `<form id="setup-form" class="setup-form" data-mode="${mode}"><p class="setup-intro">${local?'选择人数和席位，添加人机后即可在本机开始。':join?'输入朋友提供的6位邀请码，加入后在等候室等待开局。':'创建后进入等候室，邀请朋友或添加人机，再由房主开始。'}</p>
+  ${join?`${name}<label>${t('code')}<input id="room-code-input" required minlength="6" maxlength="6" pattern="[A-HJ-NP-Z2-9]{6}" autocomplete="off" autocapitalize="characters" spellcheck="false" value="${escape(ui.joinCode)}" placeholder="6位邀请码"></label>`:`${modes}${local?localSeats():name}${scoring}${local?'':`<label class="inline-field">${t('turnLimit')}<select id="turn-seconds">${[30,60,90,120].map(n=>`<option value="${n}" ${ui.seconds===n?'selected':''}>${n} ${t('seconds')}</option>`).join('')}</select></label>`}`}
+  <p id="menu-error" class="menu-error" role="alert"></p><button type="submit" id="${local?'local-start':join?'join-room':'create-room'}" class="button primary wide" ${ui.pending?'disabled':''}>${ui.pending?'请稍候…':local?t('localStart'):join?t('join'):t('create')}${icon('arrow')}</button></form>`;
+}
+function syncHomeDialog() {
+  const dialog=$('#modal'),ours=['setup','room'].includes(dialog.dataset.content);
+  if(ui.view!=='home'||!ui.menu) {if(ours) {if(dialog.open) dialog.close();dialog.innerHTML='';delete dialog.dataset.content;}return;}
+  const top=dialog.scrollTop;dialog.dataset.content=ui.menu==='room'?'room':'setup';
+  dialog.innerHTML=`<div class="modal-heading"><h2 id="modal-title">${({local:'同屏玩法',create:'创建房间',join:'加入房间',room:'房间等候室'})[ui.menu]}</h2><button type="button" id="close-modal" class="icon-button" aria-label="${t('close')}" ${ui.pending?'disabled':''}>${icon('close')}</button></div>${setupMenu(ui.menu)}`;
+  if(!dialog.open) dialog.showModal();dialog.scrollTop=top;
+}
+function actionError(error) {const node=$('#menu-error');if(node) node.textContent=t(error.message);else toast(t(error.message));}
+function roomMenu() {
   const r=ui.room,host=r.you===r.host,full=r.players.every(p=>p&&!p.left),online=r.players.every(p=>p&&(p.kind==='bot'||p.connected));
-  return `<main class="lobby-shell"><div class="lobby-intro"><p class="eyebrow">YOUR TABLE</p><h1>${t('lobbyTitle')}</h1><p>${t('lobbyDesc')}</p></div><div class="lobby-grid"><section class="lobby-main panel"><div class="lobby-code"><div><span class="eyebrow">${t('code')}</span><strong id="room-code">${r.code}</strong></div><button id="copy-invite" class="button secondary">${icon('link')}${t('invite')}</button></div><div class="lobby-seats">${r.players.map((p,i)=>`<div class="lobby-seat ${p?'':'empty'}"><div class="seat-avatar c${i}">${i+1}</div><div class="seat-name"><strong>${p?escape(p.name):t('empty')}${r.mode==='teams'?` / ${i%2?'B':'A'}队`:''}</strong><span>${ownedColors(r.capacity,i).map(badge).join('')} ${i===r.host?t('host'):''} ${i===r.you?` / ${t('you')}`:''}</span></div><span class="seat-status">${p?p.kind==='bot'?'标准机器人':t(p.connected?'connected':'offline'):''}</span>${host&&!p?`<button class="button secondary small" data-add-bot="${i}"${busy()}>添加机器人</button>`:''}${host&&p?.kind==='bot'?`<button class="text-button" data-remove-bot="${i}"${busy()}>移除</button>`:''}</div>`).join('')}</div><div class="lobby-buttons">${host?`<button id="online-start" class="button primary" ${!full||!online||!ui.connected||ui.pending?'disabled':''}>${t('start')}${icon('arrow')}</button>`:`<span>${t('waitHost')}</span>`}<p class="fine">${!full?'等待朋友加入，或添加机器人补齐空位':!online?'等待真人玩家重新连接':'玩家已就位，由房主开始'}</p></div></section><aside class="panel lobby-aside"><p class="eyebrow">TABLE SETTINGS</p><h2>${r.capacity} ${t('people')} / ${r.mode==='teams'?'双色组队':t('mode'+r.capacity)}</h2><dl><div><dt>BOARD</dt><dd>20 &times; 20</dd></div><div><dt>${t('scoring')}</dt><dd>${t(r.scoring)}</dd></div><div><dt>${t('turnLimit')}</dt><dd>${r.turnSeconds} ${t('seconds')}</dd></div></dl><p>${r.mode==='teams'?'蓝红为A队，黄绿为B队。每人控制自己的颜色，按队伍总分结算。':t(r.capacity===3?'neutralHelp':'ruleFirst')}</p>${connectionLabel()}<button id="leave-room" class="text-button" aria-label="${t('home')}">${icon('back')}${t('home')}</button></aside></div></main>`;
+  return `<div class="room-menu"><div class="lobby-intro"><p>${t('lobbyDesc')}</p></div><div class="lobby-grid"><section class="lobby-main panel"><div class="lobby-code"><div><span class="eyebrow">${t('code')}</span><strong id="room-code">${r.code}</strong></div><button id="copy-invite" class="button secondary">${icon('link')}${t('invite')}</button></div><div class="lobby-seats">${r.players.map((p,i)=>`<div class="lobby-seat ${p?'':'empty'}"><div class="seat-avatar c${i}">${i+1}</div><div class="seat-name"><strong>${p?escape(p.name):t('empty')}${r.mode==='teams'?` / ${i%2?'B':'A'}队`:''}</strong><span>${ownedColors(r.capacity,i).map(badge).join('')} ${i===r.host?t('host'):''} ${i===r.you?` / ${t('you')}`:''}</span></div><span class="seat-status">${p?p.kind==='bot'?'标准机器人':t(p.connected?'connected':'offline'):''}</span>${host&&!p?`<button class="button secondary small" data-add-bot="${i}"${busy()}>添加机器人</button>`:''}${host&&p?.kind==='bot'?`<button class="text-button" data-remove-bot="${i}"${busy()}>移除</button>`:''}</div>`).join('')}</div><div class="lobby-buttons">${host?`<button id="online-start" class="button primary" ${!full||!online||!ui.connected||ui.pending?'disabled':''}>${t('start')}${icon('arrow')}</button>`:`<span>${t('waitHost')}</span>`}<p class="fine">${!full?'等待朋友加入，或添加机器人补齐空位':!online?'等待真人玩家重新连接':'玩家已就位，由房主开始'}</p></div></section><aside class="panel lobby-aside"><h2>${r.capacity} ${t('people')} / ${r.mode==='teams'?'双色组队':t('mode'+r.capacity)}</h2><dl><div><dt>棋盘</dt><dd>20 &times; 20</dd></div><div><dt>${t('scoring')}</dt><dd>${t(r.scoring)}</dd></div><div><dt>${t('turnLimit')}</dt><dd>${r.turnSeconds} ${t('seconds')}</dd></div></dl><p>${r.mode==='teams'?'蓝红为A队，黄绿为B队。每人控制自己的颜色，按队伍总分结算。':t(r.capacity===3?'neutralHelp':'ruleFirst')}</p>${connectionLabel()}<button id="leave-room" class="text-button" aria-label="${t('home')}">${icon('home')}退出房间</button></aside></div><p class="room-lifecycle">等候室离线席位保留2分钟；房主退出后自动转交。无人房间会清理，房间内的对局不会永久保存。</p></div>`;
 }
 function canPlay() {return ui.view==='game'&&ui.game?.status==='playing'&&!ui.pending&&(ui.mode==='local'?ui.game.seats[controller(ui.game)].kind==='human':(ui.connected&&ui.room?.you===controller(ui.game)));}
 function canRematch() {return ui.view==='game'&&ui.game?.status==='finished'&&!ui.pending&&(ui.mode==='local'||ui.connected&&ui.room?.you===ui.room?.host);}
@@ -113,7 +137,7 @@ function playerCards(game) {
 function cornersButton(className='text-button') {return `<button id="show-corners" class="${className}" aria-pressed="${ui.showCorners}">${icon('hint')}${t('corners')}</button>`;}
 function auxiliaryControls(game) {
   const replaying=ui.view==='replay';
-  return `<div class="auxiliary-actions">${replaying?cornersButton():''}<button id="export-replay" class="text-button">${icon('export')}${t('export')}</button>${!replaying&&game.status==='playing'&&ui.mode==='local'?`<button id="undo" class="text-button" ${!game.history.length?'disabled':''}>${icon('back')}${t('undo')}</button>`:''}${!replaying&&game.status==='playing'?`<button id="resign" class="text-button danger" ${ui.pending||ui.mode==='local'&&!canPlay()||ui.mode==='online'&&(!ui.connected||game.resigned[ui.room.you])?'disabled':''}>${t('resign')}</button>`:''}</div>`;
+  return `<div class="auxiliary-actions">${replaying?cornersButton():''}${game.status==='finished'?`<button id="export-replay" class="text-button">${icon('export')}${t('export')}</button>`:''}${!replaying&&game.status==='playing'&&ui.mode==='local'?`<button id="undo" class="text-button" ${!game.history.length?'disabled':''}>${icon('back')}${t('undo')}</button>`:''}${!replaying&&game.status==='playing'?`<button id="resign" class="text-button danger" ${ui.pending||ui.mode==='local'&&!canPlay()||ui.mode==='online'&&(!ui.connected||game.resigned[ui.room.you])?'disabled':''}>${t('resign')}</button>`:''}</div>`;
 }
 function controlsAndActions(game) {
   const modal=compactGame.matches&&ui.piecesOpen;
@@ -126,8 +150,8 @@ function controls(game) {
   if(replaying) return `<aside id="piece-controls" class="control-panel panel replay-panel"  aria-labelledby="controls-title">${close}<div class="control-scroll"><p class="eyebrow">REPLAY / READ ONLY</p><h2 id="controls-title">${t('replay')}</h2><p class="replay-help">${t('replayHelp')}</p><div class="replay-progress"><strong id="replay-label">${ui.replayStep} / ${ui.replayRecord.actions.length}</strong><input id="replay-range" aria-label="${t('replay')}" type="range" min="0" max="${ui.replayRecord.actions.length}" value="${ui.replayStep}"></div></div><div class="replay-buttons"><button id="replay-prev" class="button secondary" ${ui.replayStep===0?'disabled':''}>${icon('back')}${t('prev')}</button><button id="replay-next" class="button primary" ${ui.replayStep===ui.replayRecord.actions.length?'disabled':''}>${t('next')}${icon('arrow')}</button></div></aside>`;
   return `<aside id="piece-controls" class="control-panel panel"  aria-label="${t('choosePiece')}">${close}<div class="control-scroll"><div class="tray-legend"><span class="c${active}"><i></i>${t('available')}</span><span><i></i>${t('used')}</span></div>
   <div class="piece-tray c${active}" aria-label="${t('choosePiece')}">${PIECES.slice().reverse().map(p=>`<button class="piece ${ui.selected===p.id?'selected':''} ${remaining.includes(p.id)?'':'used'}" data-piece="${p.id}" aria-label="${p.id} / ${p.cells.length} ${t('squares')}" aria-pressed="${ui.selected===p.id}" ${!allowed||!remaining.includes(p.id)?'disabled':''}>${miniPiece(p.id,ui.selected===p.id?ui.orientation:0)}<span>${p.id}</span></button>`).join('')}</div>
-  <section class="selection-tools" aria-label="${t('choosePiece')}"><div class="selection-preview"><div id="selected-piece" class="selected-piece">${selectionMarkup(ui.selected,ui.orientation,active)}</div><button id="clear-selection" class="icon-button" aria-label="${t('clear')}" ${!ui.selected?'disabled':''}>${icon('close')}</button></div><div class="transform-tools">${cornersButton('tool-button')}<button id="hint" class="tool-button hint-button" ${!allowed||hintPending?'disabled':''} aria-busy="${hintPending}">${icon('hint')}${t(hintPending?'calculating':'hint')}<kbd>T</kbd><small id="hint-sequence"></small></button></div></section>
-  </div></aside>`;
+  </div></aside><aside class="selection-panel panel"><section class="selection-tools" aria-label="${t('choosePiece')}"><div class="selection-preview"><div id="selected-piece" class="selected-piece">${selectionMarkup(ui.selected,ui.orientation,active)}</div><button id="clear-selection" class="icon-button" aria-label="${t('clear')}" ${!ui.selected?'disabled':''}>${icon('close')}</button></div><div class="transform-tools">${cornersButton('tool-button')}<button id="hint" class="tool-button hint-button" ${!allowed||hintPending?'disabled':''} aria-busy="${hintPending}">${icon('hint')}${t(hintPending?'calculating':'hint')}<kbd>T</kbd><small id="hint-sequence"></small></button></div></section>
+  ${ui.view==='game'?`<p id="game-shortcuts" class="keyboard-help">${t('shortcut')}</p>`:''}</aside>`;
 }
 function moveLog(game) {
   return `<section class="move-log"><h3>${t('log')}</h3>${game.history.length?`<ol>${game.history.slice().reverse().map(a=>`<li>${a.type==='move'?badge(a.color):icon('close')}<span>${escape(playerName(a.player))}<small>${a.type==='move'?`${a.move.piece} / ${String.fromCharCode(65+a.move.x)}${a.move.y+1}${a.source==='bot'?' / 机器人':a.automatic?` / ${t('auto')}`:''}`:t('resigned')}</small></span></li>`).join('')}</ol>`:`<p>${t('emptyLog')}</p>`}</section>`;
@@ -149,18 +173,19 @@ function gameView() {
   return `<main class="game-shell game-shell-v2 ${ui.view==='game'&&game.status==='finished'?'is-finished':''} ${ui.piecesOpen?'pieces-open':''}"><div class="game-layout"><aside class="players-panel" aria-labelledby="players-heading"><div class="players-heading"><h2 id="players-heading">${t('playersTitle')}</h2><span>${game.players} ${t('people')}</span></div>${playerCards(game)}${teamCards(game)}
   ${game.players===3?`<div class="neutral-bar">${badge(3)}<strong>${t('neutral')}</strong><span>${t('neutralHelp')}</span><b>${escape(playerName(controller(game,3)))}</b></div>`:''}${ui.mode==='online'?`<div class="table-status">${connectionLabel()}</div>`:''}</aside>
   <section class="board-section" aria-label="${t('boardTitle')}">
-  <div class="board-frame">${boardSVG(game)}<div id="piece-actions" class="piece-actions c${game.turn}" role="group" aria-label="${t('pieceActions')}" hidden><button id="floating-flip" data-action="flip" aria-label="${t('flip')}" title="${t('flip')}">${icon('flip')}</button><button id="floating-confirm" data-action="confirm-move" aria-label="${t('confirm')}" title="${t('confirm')}" disabled>${icon('check')}</button></div></div><span id="move-number" class="visually-hidden">${game.history.filter(a=>a.type==='move').length}</span></section>${controlsAndActions(game)}</div>${ui.view==='game'?`<p id="game-shortcuts" class="keyboard-help">${t('shortcut')}</p>`:''}<button id="pieces-backdrop" class="pieces-backdrop" aria-label="${t('closePieces')}" tabindex="-1"></button>${mobileDock(game)}</main>`;
+  <div class="board-frame">${boardSVG(game)}<div id="piece-actions" class="piece-actions c${game.turn}" role="group" aria-label="${t('pieceActions')}" hidden><button id="floating-flip" data-action="flip" aria-label="${t('flip')}" title="${t('flip')}">${icon('flip')}</button><button id="floating-confirm" data-action="confirm-move" aria-label="${t('confirm')}" title="${t('confirm')}" disabled>${icon('check')}</button></div></div><span id="move-number" class="visually-hidden">${game.history.filter(a=>a.type==='move').length}</span></section>${controlsAndActions(game)}</div><button id="pieces-backdrop" class="pieces-backdrop" aria-label="${t('closePieces')}" tabindex="-1"></button>${mobileDock(game)}</main>`;
 }
 function render() {
   if(drag) return;
   if(ui.view==='game'&&ui.game?.status==='finished'&&!resultAnnounced()) ui.piecesOpen=false;
   const focused=document.activeElement,focusId=focused?.id,focusPiece=focused?.dataset?.piece;
   document.body.dataset.screen=ui.view==='game'||ui.view==='replay'?'game':ui.view;
-  $('#app').innerHTML=header()+(ui.view==='home'?homeView():ui.view==='lobby'?lobbyView():gameView());
+  $('#app').innerHTML=header()+(ui.view==='home'?homeView():gameView());
   if(compactGame.matches&&ui.piecesOpen) document.querySelectorAll('.match-header,.players-panel,.board-section,.mobile-dock').forEach(node=>{node.inert=true;});
-  if(ui.game&&ui.view!=='home'&&ui.view!=='lobby') {updatePreview();drawFrontiers();}
+  if(ui.game&&ui.view!=='home') {updatePreview();drawFrontiers();}
   fitGameBoard(positionPieceActions);
   updateCountdown();
+  syncHomeDialog();
   syncLogDialog();
   syncResultDialog();
   const replacement=focusId?document.getElementById(focusId):focusPiece?document.querySelector(`[data-piece="${focusPiece}"]`):null;
@@ -223,7 +248,7 @@ function saveLocal() {if(ui.mode==='local'&&ui.view==='game') {if(!write(LOCAL,e
 function beginLocal(record=null) {
   ui.mode='local';ui.room=null;ui.replayRecord=null;ui.game=record?replay(record):newGame(ui.count,ui.scoring,{mode:selectedMode(),seats:ui.seatKinds.slice(0,ui.count).map(kind=>kind==='bot'?{kind,level:'standard'}:{kind})});
   ui.names=Array.from({length:ui.game.players},(_,i)=>String(record?.names?.[i]??`${ui.game.seats[i].kind==='bot'?'机器人':t('player')} ${i+1}`).slice(0,20));
-  ui.view='game';resetSelection();saveLocal();render();window.scrollTo(0,0);
+  ui.menu=null;ui.view='game';resetSelection();saveLocal();render();window.scrollTo(0,0);
 }
 function scheduleLocalBot() {
   if(ui.mode!=='local'||ui.view!=='game'||ui.game?.status!=='playing'||ui.game.seats[controller(ui.game)].kind!=='bot') return;
@@ -240,11 +265,13 @@ const network=new RoomClient({
   onState(state) {
     const key=`${state.code}:${state.round}:${state.game?.revision??-1}`;
     if(key!==lastGameKey) {resetSelection();lastGameKey=key;}
+    const enteredRoom=ui.room?.code!==state.code||ui.room?.phase!=='waiting'||ui.view!=='home';
     ui.mode='online';ui.room=state;ui.game=state.game;ui.names=state.players.map((p,i)=>p?.name??`${t('player')} ${i+1}`);
-    ui.clockOffset=state.now-Date.now();ui.view=state.phase==='waiting'?'lobby':'game';render();
+    ui.clockOffset=state.now-Date.now();ui.view=state.phase==='waiting'?'home':'game';
+    if(state.phase!=='waiting') ui.menu=null;else if(enteredRoom) ui.menu='room';render();
   },
   onConnection(connected) {ui.connected=connected;if(ui.mode==='online'&&ui.view!=='home') render();},
-  onLost(code) {ui.mode='local';ui.room=null;ui.game=null;ui.view='home';resetSelection();render();toast(t(code));}
+  onLost(code) {ui.mode='local';ui.room=null;ui.game=null;ui.view='home';ui.menu=null;resetSelection();render();toast(t(code));}
 });
 async function commitMove() {
   const move=currentMove();if(!canPlay()||!move||!validateMove(ui.game,move).ok) return;
@@ -277,7 +304,7 @@ function showResultDialog() {
 function syncResultDialog() {
   const dialog=$('#modal');
   if(ui.view!=='game'||ui.game?.status!=='finished') {
-    if(dialog.open&&dialog.dataset.content==='result') dialog.close();
+    if(dialog.dataset.content==='result') {if(dialog.open) dialog.close();dialog.innerHTML='';delete dialog.dataset.content;}
     return;
   }
   if(dialog.open&&dialog.dataset.content==='result') {const button=$('#rematch');if(button) button.disabled=!canRematch();}
@@ -299,7 +326,7 @@ async function goHome() {
     try{await network.command({type:'leave'});}catch(error){if(!['ROOM_NOT_FOUND','UNAUTHORIZED'].includes(error.message)) throw error;}
     network.stop();
   }
-  saveLocal();ui.view='home';ui.mode='local';ui.room=null;ui.game=null;ui.replayRecord=null;resetSelection();render();window.scrollTo(0,0);
+  saveLocal();ui.menu=null;ui.view='home';ui.mode='local';ui.room=null;ui.game=null;ui.replayRecord=null;resetSelection();render();window.scrollTo(0,0);
 }
 async function resumeOnline(session,automatic=false) {
   ui.pending=true;ui.mode='online';render();
@@ -315,9 +342,12 @@ function transformSelection(action) {
 }
 async function handleButton(button) {
   const id=button.dataset.action??button.id;
+  if(ui.pending) return;
+  if(button.dataset.menu) {if(ui.room) return;captureOptions();ui.menu=button.dataset.menu;render();return;}
+  if(id==='return-room') {ui.menu='room';render();return;}
   if(button.dataset.recover!==undefined) {
     const session=ui.recoveries[Number(button.dataset.recover)];
-    if(session&&!ui.pending) {captureOptions();await resumeOnline({code:session.code,token:session.token});}
+    if(session&&!ui.pending&&!ui.room) {captureOptions();await resumeOnline({code:session.code,token:session.token});}
     return;
   }
   if(button.dataset.count) {captureOptions();ui.count=Number(button.dataset.count);render();return;}
@@ -400,16 +430,24 @@ $('#app').addEventListener('click',event=>{
   const button=event.target.closest('button');if(button&&!button.disabled) handleButton(button).catch(error=>toast(t(error.message)));
 });
 $('#modal').addEventListener('click',event=>{
-  if(event.target.closest('#close-modal')||event.target===$('#modal')) $('#modal').close();
-  else {const button=event.target.closest('#rematch');if(button&&!button.disabled) handleButton(button).catch(error=>toast(t(error.message)));}
+  if(event.target.closest('#close-modal')||event.target===$('#modal')) {if(!ui.pending){captureOptions();ui.menu=null;$('#modal').close();}}
+  else {const button=event.target.closest('button');if(button&&!button.disabled&&!(button.type==='submit'&&button.closest('form'))) handleButton(button).catch(actionError);}
 });
-$('#app').addEventListener('change',event=>{
-  if(event.target.id==='replay-range') setReplayStep(Number(event.target.value));else {captureOptions();if(event.target.id==='game-mode') render();}
+$('#modal').addEventListener('cancel',event=>{if(ui.pending) event.preventDefault();else {captureOptions();ui.menu=null;}});
+$('#modal').addEventListener('close',()=>{if(!$('#modal').open&&['setup','room'].includes($('#modal').dataset.content)) {captureOptions();ui.menu=null;}});
+$('#modal').addEventListener('submit',event=>{
+  if(event.target.id!=='setup-form') return;event.preventDefault();
+  const button=event.target.querySelector('button[type="submit"]');if(button&&!button.disabled) handleButton(button).catch(actionError);
 });
-$('#app').addEventListener('input',event=>{
-  if(event.target.id==='room-code-input') event.target.value=event.target.value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);
-  if(event.target.id==='replay-range') $('#replay-label').textContent=`${event.target.value} / ${ui.replayRecord.actions.length}`;
-});
+for(const root of [$('#app'),$('#modal')]) {
+  root.addEventListener('change',event=>{
+    if(event.target.id==='replay-range') setReplayStep(Number(event.target.value));else {captureOptions();if(event.target.id==='game-mode') render();}
+  });
+  root.addEventListener('input',event=>{
+    if(event.target.id==='room-code-input') event.target.value=event.target.value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);
+    if(event.target.id==='replay-range') $('#replay-label').textContent=`${event.target.value} / ${ui.replayRecord.actions.length}`;
+  });
+}
 function pointerPoint(event) {
   const r=$('#board').getBoundingClientRect();
   return {clientX:event.clientX,clientY:event.clientY,x:(event.clientX-r.left)/r.width*20,y:(event.clientY-r.top)/r.height*20};
@@ -470,14 +508,17 @@ compactGame.addEventListener('change',()=>{if(drag) finishGesture(null,true);ui.
 function setReplayStep(step) {ui.replayStep=Math.max(0,Math.min(ui.replayRecord.actions.length,step));ui.game=replay(ui.replayRecord,ui.replayStep);resetSelection();render();}
 $('#import-file').addEventListener('change',async event=>{
   const file=event.target.files?.[0];event.target.value='';if(!file) return;
+  if(ui.room) {toast('请先退出当前房间再导入棋谱');return;}
   try {if(file.size>524288) throw Error();const input=JSON.parse(await file.text()),validated=replay(input);
     ui.replayRecord=exportReplay(validated,Array.isArray(input.names)?input.names:[]);ui.names=ui.replayRecord.names;
     ui.mode='local';ui.room=null;ui.view='replay';setReplayStep(0);window.scrollTo(0,0);
   } catch {toast(t('INVALID_REPLAY'));}
 });
 window.addEventListener('pagehide',()=>{network.stop(false);analysis.cancel();botAnalysis.cancel();botGeneration++;botKey=null;});
-window.addEventListener('pageshow',event=>{const session=event.persisted?savedSession():null;if(session) resumeOnline(session,true).catch(error=>toast(t(error.message)));else if(event.persisted) scheduleLocalBot();});
+window.addEventListener('pageshow',event=>{const session=event.persisted?savedSession():null;if(session) resumeOnline(session,true).catch(error=>toast(t(error.message)));
+else if(ui.joinCode) {ui.menu='join';render();}else if(event.persisted) scheduleLocalBot();});
 setInterval(updateCountdown,1000);
 render();
 const session=savedSession();
 if(session) resumeOnline(session,true).catch(error=>toast(t(error.message)));
+else if(ui.joinCode) {ui.menu='join';render();}

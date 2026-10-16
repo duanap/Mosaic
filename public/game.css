@@ -457,3 +457,22 @@ body[data-screen="game"] #app {
   .game-shell-v2.is-finished .controls-column {display:flex; position:static; width:auto}
   .game-shell-v2.is-finished .close-pieces {display:none}
 }
+
+/* Inventory and selection are independent cards whose height follows content. */
+.game-shell-v2 .controls-column {overflow-y:auto; scrollbar-width:thin; overscroll-behavior:contain}
+.game-shell-v2 .controls-column>.control-panel {flex:none; height:auto; overflow:visible}
+.game-shell-v2 .control-scroll {flex:none; overflow:visible}
+.game-shell-v2 .selection-panel {flex:none; min-width:0; padding:14px 16px 10px; border-radius:var(--match-radius); box-shadow:var(--shadow)}
+.game-shell-v2 .selection-panel .selection-tools {border:0; padding:0}
+.game-shell-v2 #game-shortcuts {display:block; margin:10px 0 0; padding:0; text-align:center; font-size:10px; line-height:1.6; color:var(--muted)}
+.piece-actions {padding:0; border:0; background:transparent; box-shadow:none; border-radius:0}
+.piece-actions button {border:0; box-shadow:none}
+@media (orientation:portrait) and (max-width:1000px) {
+ .game-shell-v2 .controls-column {overflow:visible}
+}
+@media (min-width:600px) and (max-height:560px) and (orientation:landscape) {
+ .game-shell-v2 .selection-panel {padding:12px 14px 10px; border-radius:14px}
+ .game-shell-v2 .controls-column>.control-panel {flex:none; height:auto; overflow:visible}
+ .game-shell-v2 .control-scroll {overflow:visible}
+ .game-shell-v2.is-finished .auxiliary-panel {position:sticky; bottom:0; z-index:2}
+}

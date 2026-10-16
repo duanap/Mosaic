@@ -1,41 +1,41 @@
 {
   "date": "2026-10-17",
-  "feature": "Match UI 2.0",
+  "feature": "Match UI 2.0 and lobby dialogs",
   "baseCommit": "fb73d1b8275fdd563010fce3ed4a3fd613ed2855",
   "branch": "feat/game-ui-v2-landscape",
   "native": {
     "command": "npm run verify",
     "passed": 70,
     "failed": 0,
-    "modules": 34,
+    "modules": 36,
     "build": true
   },
   "browser": {
     "command": "npm run test:browser",
-    "passed": 35,
+    "passed": 38,
     "failed": 0,
     "engine": "Installed Edge/Chromium headless",
     "mode": "Actual loopback HTTP/SSE, native storage, CSP, module workers and CDP touch",
-    "log": "artifacts/ui-v2-cleanup-browser.log",
-    "additionalCheck": "artifacts/ui-v2-cleanup-ended.log"
+    "log": "artifacts/lobby-browser-full.log",
+    "additionalCheck": "artifacts/lobby-menus-final.log"
   },
   "viewports": [
     {
       "width": 1920,
       "height": 1080,
-      "board": 913,
+      "board": 938,
       "threeColumns": true
     },
     {
       "width": 1600,
       "height": 900,
-      "board": 733,
+      "board": 758,
       "threeColumns": true
     },
     {
       "width": 1366,
       "height": 768,
-      "board": 601,
+      "board": 626,
       "threeColumns": true
     },
     {
@@ -53,13 +53,13 @@
     {
       "width": 844,
       "height": 390,
-      "board": 232,
+      "board": 254,
       "threeColumns": false
     },
     {
       "width": 932,
       "height": 430,
-      "board": 272,
+      "board": 294,
       "threeColumns": false
     },
     {
@@ -82,7 +82,7 @@
     "selected rotation/reflection synchronized",
     "duo/trio/classic/teams and live scores",
     "disabled illegal confirmation",
-    "actual replay export download",
+    "finished-game replay export download",
     "captured drag survives SSE presence updates",
     "keyboard focus, Esc and modal drawer focus wrap",
     "orientation changes and inert restoration",
@@ -111,7 +111,16 @@
     "R/F shortcuts work after removing preview transform buttons",
     "finished games omit undo, result shortcut and bottom dock",
     "main rematch remains visible in finished short landscape",
-    "home removes English decorative slogans and subtitles"
+    "home removes English decorative slogans and subtitles",
+    "three native setup dialogs and waiting-only room menu",
+    "cancel setup without creating rooms; inline join error preserves input",
+    "single-flight create and blocked dismissal while pending",
+    "waiting room dismissal and reload retain membership",
+    "host transfer and last-human room cleanup",
+    "invitation opens prefilled join menu",
+    "attached room blocks competing setup/import/recovery entry points",
+    "auto-height inventory and selection cards with shortcuts inside preview",
+    "borderless floating action container; export only after game end"
   ],
   "unchanged": [
     "shared rules/strategy",
@@ -127,7 +136,10 @@
     "docs/screenshots/ui-v2/phone-portrait-controls.png",
     "docs/screenshots/ui-v2/result-dialog.png",
     "docs/screenshots/ui-v2/home-light.png",
-    "docs/screenshots/ui-v2/phone-landscape-finished.png"
+    "docs/screenshots/ui-v2/phone-landscape-finished.png",
+    "docs/screenshots/ui-v2/home-mobile.png",
+    "docs/screenshots/ui-v2/local-setup-mobile.png",
+    "docs/screenshots/ui-v2/room-waiting.png"
   ],
   "notVerified": [
     "physical Android/iOS Safari",
@@ -135,5 +147,5 @@
     "production domain deployment"
   ],
   "review": "Author self-review; independent review not claimed",
-  "delivery": "Feature branch for review; main not merged; production not updated"
+  "delivery": "Validated for user-authorized main merge and production deployment; production verification recorded separately after release."
 }

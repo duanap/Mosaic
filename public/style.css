@@ -19,3 +19,47 @@
 
 /* Mode, seat and team settings. */
 .mode-settings{max-width:460px;margin:0 0 20px}.local-seats{border:1px solid var(--line);border-radius:10px;margin:18px 0;padding:12px;display:grid;gap:9px}.local-seats legend{font-size:11px;color:var(--muted);padding:0 6px}.local-seats label{display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:8px;font-size:11px}.local-seats label>span{display:flex;align-items:center;gap:5px;flex-wrap:wrap}.local-seats select{font-size:11px;max-width:145px;padding:7px}.team-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}.team-cards article{padding:13px;border:1px solid var(--line);border-radius:12px;background:var(--accent-soft);display:flex;flex-direction:column;gap:6px;font-size:11px}.team-cards span{color:var(--muted)}.lobby-seat{flex-wrap:wrap}.lobby-buttons{flex-wrap:wrap}.lobby-buttons .fine{flex-basis:100%}.board-svg{cursor:grab}.board-svg:active{cursor:grabbing}@media(max-width:420px){.lobby-seat{gap:8px}.local-seats label>span{max-width:150px}.team-cards{gap:7px}.team-cards article{padding:10px}}
+
+/* Three lobby entry points open native dialogs; creating a room never starts it. */
+.entry-grid {display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px}
+.entry-card {position:relative; display:flex; flex-direction:column; align-items:flex-start; text-align:left; gap:18px; padding:28px; min-height:210px; transition:border-color .15s,box-shadow .15s}
+.entry-card:hover:not(:disabled) {border-color:var(--accent); box-shadow:var(--shadow)}
+.entry-card>strong {font-size:22px; color:var(--ink)}
+.entry-card>span:not(.card-icon):not(.entry-arrow) {font-size:12px; color:var(--muted); line-height:1.8; max-width:90%}
+.entry-card .entry-arrow {position:absolute; right:22px; top:34px; color:var(--accent)}
+.active-room {display:flex; flex-wrap:wrap; align-items:center; gap:12px; padding:18px; margin-bottom:18px}
+.active-room>div {flex:1; min-width:180px}
+.active-room strong {font-size:14px}
+.active-room p,.room-lifecycle {font-size:11px; color:var(--muted); line-height:1.8; margin-top:7px}
+#modal[data-content="setup"] {width:min(560px,calc(100vw - 28px))}
+#modal[data-content="room"] {width:min(940px,calc(100vw - 28px))}
+.setup-form {display:flex; flex-direction:column; gap:18px}
+.setup-intro {font-size:13px; color:var(--muted); line-height:1.8}
+.setup-modes {display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px}
+.setup-modes button {display:flex; flex-direction:column; gap:7px; min-height:75px; padding:10px; border:1px solid var(--line); border-radius:12px; background:var(--surface-soft)}
+.setup-modes strong {font-size:20px}
+.setup-modes span {font-size:10px; color:var(--muted)}
+.setup-modes .selected {border-color:var(--accent); color:var(--accent); background:var(--accent-soft)}
+.setup-form .inline-field {margin:0; gap:12px}
+.setup-form .local-seats {margin:0}
+.setup-form input,.setup-form select {max-width:100%}
+.menu-error {font-size:12px; color:var(--danger); line-height:1.7}
+.menu-error:empty {display:none}
+.room-menu .lobby-intro {margin-bottom:18px}
+.room-menu .lobby-grid {gap:16px; grid-template-columns:minmax(0,1.65fr) minmax(0,1fr)}
+.room-menu .lobby-main,.room-menu .lobby-aside {padding:18px}
+.room-menu .lobby-seat {padding:16px 0; flex-wrap:wrap}
+.room-menu .lobby-code strong {font-size:28px}
+.room-menu .lobby-code .button {padding:8px; min-height:40px}
+.room-menu .lobby-buttons {flex-wrap:wrap}
+.room-menu .lobby-aside h2 {font-size:17px}
+@media(max-width:700px) {
+ .entry-grid {grid-template-columns:minmax(0,1fr); gap:12px}
+ .entry-card {min-height:150px; padding:22px; gap:12px}
+ .entry-card>strong {font-size:20px}
+ .room-menu .lobby-grid {grid-template-columns:minmax(0,1fr)}
+ .room-menu .lobby-aside dl {display:flex; flex-wrap:wrap; gap:6px 14px}
+ .room-menu .lobby-aside dl>div {flex:1; min-width:120px; gap:8px}
+ .setup-form .inline-field {flex-wrap:wrap}
+ .setup-form .inline-field select {min-width:0; flex:1}
+}

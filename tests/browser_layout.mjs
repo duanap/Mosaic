@@ -1,3 +1,4 @@
+import { openSetup, startLocal } from './browser_helpers.mjs';
 /** Real game layout and accessibility regression tests, using HTTP and module workers. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,7 +14,7 @@ test('minimal board chrome, color breathing outline and stacked connection and h
   const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
   try {
     const context=await browser.newContext({viewport:{width:1366,height:768},reducedMotion:'no-preference'}),page=await context.newPage();
-    page.setDefaultTimeout(10000);await page.goto(`http://127.0.0.1:${app.server.address().port}`);await page.locator('#local-start').click();
+    page.setDefaultTimeout(10000);await page.goto(`http://127.0.0.1:${app.server.address().port}`);await startLocal(page);
     assert.equal(await page.locator('.board-heading,.board-meta,.player-type,.player-score span,.control-heading>div>span').count(),0);
     assert.equal(await page.locator('#board text').count(),0);
     assert.ok((await page.locator('.color-mark').allTextContents()).every(text=>text===''));
@@ -54,7 +55,7 @@ test('UI 2.0 fits actual games across desktop tablet and phone sizes',async t=>{
       const context=await browser.newContext({viewport:{width,height},hasTouch:width<1000}),page=await context.newPage(),errors=[];
       try {
         page.setDefaultTimeout(15000);
-        page.on('pageerror',e=>errors.push(e.message));await page.goto(`http://127.0.0.1:${app.server.address().port}`);await page.locator('#local-start').click();
+        page.on('pageerror',e=>errors.push(e.message));await page.goto(`http://127.0.0.1:${app.server.address().port}`);await startLocal(page);
         await page.locator('.players-panel').waitFor();
         const summary=await page.locator('.match-context').boundingBox();assert.ok(Math.abs(summary.x+summary.width/2-width/2)<1,'match summary is centered on the viewport');
         await page.waitForFunction(()=>{const b=document.querySelector('#board').getBoundingClientRect();return Math.abs(b.width-b.height)<1&&b.width>150;});
@@ -65,13 +66,14 @@ test('UI 2.0 fits actual games across desktop tablet and phone sizes',async t=>{
         assert.equal(await page.locator('#selected-piece-preview').count(),1);assert.match(await page.locator('.player-card').first().innerText(),/-89/);
         if(width>=1024&&height>=600) {
           assert.ok(left.x+left.width<=b.x,'players on the left');assert.ok(right.x>=b.x+b.width,'controls on the right');
-          const confirm=await page.locator('#confirm-move').boundingBox();assert.ok(confirm.y>=0&&confirm.y+confirm.height<=height+1);
+          await page.locator('#confirm-move').scrollIntoViewIfNeeded();const confirm=await page.locator('#confirm-move').boundingBox();assert.ok(confirm.y>=0&&confirm.y+confirm.height<=height+1);
           assert.ok(await page.evaluate(()=>document.documentElement.scrollHeight<=innerHeight+1),'desktop has no whole-page scroll');
         }
         const compact=width>height&&height<=560;
         if(compact) {await page.locator('#dock-pieces').click();await page.locator('#game-controls').waitFor({state:'visible'});}
         await page.locator('[data-piece="F5"]').click();
         if(compact) await page.locator('#dock-pieces').click();
+        await page.locator('.selection-panel').scrollIntoViewIfNeeded();
         const preview=await page.locator('.selection-preview').boundingBox(),tools=await page.locator('.transform-tools').boundingBox();assert.ok(Math.abs(preview.width-preview.height)<1&&Math.abs(preview.width-tools.width)<1,'square preview and equal columns at every size');
         const shape=await page.locator('#selected-piece-preview').innerHTML();assert.match(await page.locator('#selected-piece-meta').innerText(),/F5/);
         await page.keyboard.press('r');assert.notEqual(await page.locator('#selected-piece-preview').innerHTML(),shape);
@@ -87,7 +89,7 @@ test('UI 2.0 fits actual games across desktop tablet and phone sizes',async t=>{
         if(compact) await page.locator('#dock-pieces').click();
         await page.locator('[data-piece="I5"]').click();if(compact) await page.locator('#dock-pieces').click();
         await page.locator('#show-corners').click();assert.equal(await page.locator('#show-corners').getAttribute('aria-pressed'),'true');
-        const downloadPromise=page.waitForEvent('download');await page.locator('#export-replay').click();const download=await downloadPromise;assert.match(download.suggestedFilename(),/\.json$/);
+        assert.equal(await page.locator('#export-replay').count(),0,'export appears only after the game finishes');
         if(compact) await page.locator('#close-pieces').click();
         await page.locator('#board').focus();await page.keyboard.press('Escape');await page.evaluate(()=>window.scrollTo(0,0));
         if(width===1920||compact||width===390) await page.screenshot({path:`artifacts/browser/ui-v2/light-${width}x${height}.png`,fullPage:true});
@@ -105,8 +107,8 @@ test('presence snapshots preserve captured drag while the new layout defers rend
   const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
   try {
     const a=await browser.newPage({viewport:{width:1366,height:768}}),b=await browser.newPage(),base=`http://127.0.0.1:${app.server.address().port}`;
-    await a.goto(base);await a.locator('#mode-2').click();await a.locator('#create-room').click();const code=await a.locator('#room-code').innerText();
-    await b.goto(base);await b.locator('#room-code-input').fill(code);await b.locator('#join-room').click();await a.locator('#online-start').click();
+    await a.goto(base);await openSetup(a,'create');await a.locator('#mode-2').click();await a.locator('#create-room').click();const code=await a.locator('#room-code').innerText();
+    await b.goto(base);await openSetup(b,'join');await b.locator('#room-code-input').fill(code);await b.locator('#join-room').click();await a.locator('#online-start').click();
     await a.locator('.match-header #countdown').waitFor();assert.equal(await a.locator('.board-section #countdown').count(),0);
     await a.locator('[data-piece="F5"]').click();const board=await a.locator('#board').boundingBox(),cell=board.width/20,last=await a.locator('#preview rect').last().boundingBox(),x=last.x+last.width/2,y=last.y+last.height/2;
     await a.evaluate(()=>{window.testCapturedBoard=document.querySelector('#board');});
@@ -127,8 +129,8 @@ test('UI 2.0 keeps modes, disabled states, replay, drawer focus and rotation cha
     page.setDefaultTimeout(15000);page.on('pageerror',e=>errors.push(e.message));
     const base=`http://127.0.0.1:${app.server.address().port}`;await page.goto(base);
     for(const count of [2,3,4]) {
-      await page.locator('#mode-'+count).click();if(count===4) await page.locator('#game-mode').selectOption('teams');
-      await page.locator('#local-start').click();assert.equal(await page.locator('.player-card').count(),count);
+      await openSetup(page,'local');await page.locator('#mode-'+count).click();if(count===4) await page.locator('#game-mode').selectOption('teams');
+      await startLocal(page);assert.equal(await page.locator('.player-card').count(),count);
       assert.match(await page.locator('.player-card').first().innerText(),count===2?/-178/ : /-89/);
       assert.equal(await page.locator('.neutral-bar').count(),count===3?1:0);assert.equal(await page.locator('.team-cards article').count(),count===4?2:0);
       await page.locator('[data-piece="F5"]').click();assert.equal(await page.locator('#confirm-move').isDisabled(),true,'F5 base orientation does not cover the starting corner');

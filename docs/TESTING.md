@@ -16,7 +16,7 @@ $env:CHROMIUM_PATH = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.e
 npm run test:browser
 ```
 
-`tests/browser_gameplay.mjs`, `tests/browser_recovery.mjs`, `tests/browser_layout.mjs`, and `tests/browser_controls.mjs` start real local servers on ephemeral ports, with actual CSP, native storage, HTTP/SSE and module Workers. Current acceptance uses no bridge or emulated storage. Optional browser packages are not production dependencies.
+`tests/browser_gameplay.mjs`, `tests/browser_recovery.mjs`, `tests/browser_layout.mjs`, `tests/browser_controls.mjs`, and `tests/browser_lobby.mjs` start real local servers on ephemeral ports, with actual CSP, native storage, HTTP/SSE and module Workers. Current acceptance uses no bridge or emulated storage. Optional browser packages are not production dependencies.
 
 The UI 2.0 layout suite checks nine real viewport sizes (1920×1080 through 360×800), full desktop three-column fit, square SVG bounds, selected-shape synchronization, actual export downloads, all local modes, invalid-move confirmation, keyboard focus, narrow landscape drawer/inert/focus wrapping, orientation changes, read-only replay and captured drag surviving an SSE presence update. See [UI 2.0 delivery](UI_V2.md) and [its verification report](UI_V2_VERIFICATION.json). Screenshots in `docs/screenshots/ui-v2/` are committed review artifacts; other screenshots/logs remain ignored under artifacts/.
 
@@ -44,3 +44,5 @@ Seeds affect near-ties only, so many games may share deterministic opening lines
 ## Remaining acceptance
 
 Chromium touch simulation is not physical Android or iOS Safari. Check grabbing every solid region, holes, short tap, four edges, scrolling outside board, dock confirmation, orientation changes and cancellation/multiple fingers on actual devices. Record device/browser and outcomes. Repeat bot/team/recovery flows through actual HTTPS/reverse proxy/CDN. Local validation does not deploy or verify production infrastructure.
+
+The lobby suite covers cancel-without-creating, native form validation and inline server errors, local bots, invitation-prefilled joining, waiting-only dialogs, close/reopen/reload, host transfer, last-human cleanup, prevented duplicate creation, and blocking save/import switching while attached to a room.

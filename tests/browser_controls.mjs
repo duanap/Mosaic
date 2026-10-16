@@ -1,3 +1,4 @@
+import { openSetup, startLocal } from './browser_helpers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -10,7 +11,7 @@ test('piece-local flip and confirm follow held drags and stay inside the board',
   const app=createApp();await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
   const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
   try {
-    const page=await browser.newPage({viewport:{width:1366,height:768}});await page.goto(`http://127.0.0.1:${app.server.address().port}`);await page.locator('#local-start').click();
+    const page=await browser.newPage({viewport:{width:1366,height:768}});await page.goto(`http://127.0.0.1:${app.server.address().port}`);await startLocal(page);
     assert.equal(await page.locator('#piece-actions').isVisible(),false);
     await page.locator('[data-piece="F5"]').click();assert.equal(await page.locator('#floating-confirm').isDisabled(),true);
     const before=await page.locator('#preview').innerHTML();await page.locator('#floating-flip').click();assert.notEqual(await page.locator('#preview').innerHTML(),before);
@@ -28,7 +29,7 @@ test('portrait selection preserves scroll, splits preview equally and precedes s
   const app=createApp();await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
   const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
   try {
-    const page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true});await page.goto(`http://127.0.0.1:${app.server.address().port}`);await page.locator('#local-start').click();
+    const page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true});await page.goto(`http://127.0.0.1:${app.server.address().port}`);await startLocal(page);
     for(const [width,height] of [[390,844],[360,800],[768,1024]]) {
       await page.setViewportSize({width,height});
       await page.locator('[data-piece="F5"]').evaluate(node=>scrollTo(0,node.getBoundingClientRect().top+scrollY-180));await page.evaluate(()=>new Promise(requestAnimationFrame));const scroll=await page.evaluate(()=>scrollY);
@@ -38,9 +39,10 @@ test('portrait selection preserves scroll, splits preview equally and precedes s
       assert.ok(Math.abs(preview.width-tools.width)<1,'preview and actions each get half the row');assert.ok(Math.abs(preview.width-preview.height)<1,'preview card is square');
       const controls=await page.locator('#game-controls').boundingBox(),seats=await page.locator('.players-panel').boundingBox(),main=await page.locator('#piece-controls').boundingBox(),aux=await page.locator('.auxiliary-panel').boundingBox();
       assert.ok(controls.y+controls.height<=seats.y);assert.ok(aux.y>=main.y+main.height+8);
-      assert.equal(await page.locator('.transform-tools #show-corners').count(),1);assert.equal(await page.locator('.auxiliary-panel #export-replay,.auxiliary-panel #confirm-move').count(),2);
+      assert.equal(await page.locator('.selection-panel .transform-tools #show-corners').count(),1);assert.equal(await page.locator('.auxiliary-panel #confirm-move').count(),1);
       assert.equal(await page.locator('.player-state>span:first-child').nth(1).innerText(),'等待回合');
       assert.equal(await page.locator('.player-state>span:first-child+.player-colors').count(),4);
+      assert.equal(await page.locator('.selection-panel #game-shortcuts').count(),1);assert.equal(await page.locator('#piece-controls .selection-preview').count(),0);assert.equal(await page.locator('#export-replay').count(),0);
       assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
       if(width===390) {await page.evaluate(()=>scrollTo(0,0));await mkdir('artifacts/browser/ui-v2',{recursive:true});await page.screenshot({path:'artifacts/browser/ui-v2/phone-portrait-controls.png',fullPage:true});}
     }
@@ -60,13 +62,14 @@ test('finished game announces winners once, closes for board inspection and rema
     assert.equal(await page.locator('#piece-actions').isVisible(),false);assert.equal(await page.locator('.result-banner').count(),0);
     await mkdir('artifacts/browser/ui-v2',{recursive:true});await page.screenshot({path:'artifacts/browser/ui-v2/result-dialog.png',fullPage:true});
     await page.locator('#close-modal').click();assert.equal(await page.locator('#modal').isVisible(),false);
+    const downloaded=page.waitForEvent('download');await page.locator('#export-replay').click();assert.match((await downloaded).suggestedFilename(),/\.json$/);
     await page.locator('#theme-toggle').click();assert.equal(await page.locator('#modal').isVisible(),false,'ordinary renders do not reopen a dismissed result');
     assert.equal((await page.locator('#confirm-move').innerText()).trim(),'再来一局');assert.equal(await page.locator('#confirm-move').isDisabled(),false);
     for(const [width,height] of [[1366,768],[844,390],[390,844]]) {
       await page.setViewportSize({width,height});
       assert.equal(await page.locator('#undo,#result-button,.mobile-dock').count(),0,'finished game removes undo, result shortcut and bottom dock');
       assert.equal(await page.locator('#game-controls').isVisible(),true);assert.equal(await page.locator('#confirm-move').isEnabled(),true);
-      if(width===844) {const confirm=await page.locator('#confirm-move').boundingBox();assert.ok(confirm.y>=0&&confirm.y+confirm.height<=height,'main rematch remains on screen without a bottom dock');await page.screenshot({path:'artifacts/browser/ui-v2/phone-landscape-finished.png',fullPage:true});}
+      if(width===844) {await page.locator('#confirm-move').scrollIntoViewIfNeeded();const confirm=await page.locator('#confirm-move').boundingBox();assert.ok(confirm.y>=0&&confirm.y+confirm.height<=height,'main rematch remains on screen without a bottom dock');await page.screenshot({path:'artifacts/browser/ui-v2/phone-landscape-finished.png',fullPage:true});}
     }
     await page.locator('#confirm-move').click();assert.equal(await page.locator('#move-number').innerText(),'0');
     await page.setViewportSize({width:1366,height:768});
@@ -82,7 +85,7 @@ test('selection, Enter/T shortcuts, merged confirmation and header history dialo
     await page.goto(`http://127.0.0.1:${app.server.address().port}`);
     assert.doesNotMatch(await page.locator('.home-shell').innerText(),/SMALL BOARD|BIG POSSIBILITIES|NEW ANGLE|LITTLE SQUARES|SAME SCREEN|PLAY TOGETHER|LET'S PLAY/);
     await mkdir('artifacts/browser/ui-v2',{recursive:true});await page.screenshot({path:'artifacts/browser/ui-v2/home-light.png',fullPage:true});
-    await page.locator('#local-start').click();
+    await startLocal(page);
     // Reproduce the reported defect: a mouse selection left focus on the tray button.
     await page.locator('[data-piece="I5"]').click();await page.keyboard.press('Enter');
     assert.equal(await page.locator('#move-number').innerText(),'1','Enter confirms immediately after selecting a valid piece');
@@ -115,8 +118,8 @@ test('online confirmation resists repeated Enter and the history modal receives 
   let release;
   try {
     const a=await browser.newPage({viewport:{width:1366,height:768}}),b=await browser.newPage(),base=`http://127.0.0.1:${app.server.address().port}`;
-    await a.goto(base);await a.locator('#mode-2').click();await a.locator('#create-room').click();const code=await a.locator('#room-code').innerText();
-    await b.goto(base);await b.locator('#room-code-input').fill(code);await b.locator('#join-room').click();await a.locator('#online-start').click();
+    await a.goto(base);await openSetup(a,'create');await a.locator('#mode-2').click();await a.locator('#create-room').click();const code=await a.locator('#room-code').innerText();
+    await b.goto(base);await openSetup(b,'join');await b.locator('#room-code-input').fill(code);await b.locator('#join-room').click();await a.locator('#online-start').click();
     await b.locator('#log-button').click();assert.equal(await b.locator('#modal-log li').count(),0);
     const gate=new Promise(r=>{release=r;});let requests=0;
     await a.route('**/commands',async route=>{if(route.request().postDataJSON().type==='move'){requests++;await gate;}await route.continue();});

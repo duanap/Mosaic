@@ -1,3 +1,4 @@
+import { openSetup, startLocal } from './browser_helpers.mjs';
 /** Direct-origin browser tests; optional Playwright and installed Chromium/Edge. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -15,7 +16,7 @@ test('desktop and touch placement uses held drag and full-piece bounds',async t=
       const context=await browser.newContext({viewport:mobile?{width:390,height:844}:{width:1440,height:1000},hasTouch:mobile,isMobile:mobile});
       try {
         const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
-        await page.goto(`http://127.0.0.1:${app.server.address().port}`);await page.locator('#local-start').click();
+        await page.goto(`http://127.0.0.1:${app.server.address().port}`);await startLocal(page);
         await page.locator('[data-piece="F5"]').click();await page.locator('#board').scrollIntoViewIfNeeded();
         const rects=()=>page.locator('#preview').innerHTML();
         const before=await rects();await page.mouse.move(0,0);await page.mouse.move(200,200);assert.equal(await rects(),before);
@@ -62,7 +63,7 @@ test('manual four-color opening, keyboard focus and v1 replay safety',async()=>{
   const app=createApp();await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
   const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
   try {
-    const page=await browser.newPage();await page.goto(`http://127.0.0.1:${app.server.address().port}`);await page.locator('#local-start').click();
+    const page=await browser.newPage();await page.goto(`http://127.0.0.1:${app.server.address().port}`);await startLocal(page);
     for(let i=0;i<4;i++) {await page.locator('[data-piece="I5"]').click();await page.locator('#confirm-move').click();}
     assert.equal(await page.locator('#move-number').innerText(),'4');
     await page.locator('#hint').focus();await page.keyboard.press('Enter');await page.locator('#preview rect').first().waitFor();
@@ -75,7 +76,7 @@ test('manual four-color opening, keyboard focus and v1 replay safety',async()=>{
     await page.locator('#replay-next').waitFor();assert.equal(await page.locator('img').count(),0);assert.match(await page.locator('.player-ident strong').first().innerText(),/<img/);
     await page.locator('#home-button').click();record.actions=[{type:'move',color:0,player:0,move:{piece:'I5',orientation:0,x:5,y:5}}];
     await page.locator('#import-file').setInputFiles({name:'bad.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(record))});
-    await page.locator('#toast').waitFor();assert.equal(await page.locator('#local-start').count(),1);
+    await page.locator('#toast').waitFor();assert.equal(await page.locator('#open-local').count(),1);
   } finally {await browser.close();app.shutdown();await new Promise(r=>app.server.close(r));}
 });
 
@@ -87,8 +88,8 @@ test('three and four human seats start without readiness and retain neutral cont
       const context=await browser.newContext(),pages=[];
       try {
         for(let i=0;i<count;i++) {const page=await context.newPage();pages.push(page);await page.goto(`http://127.0.0.1:${app.server.address().port}`);}
-        const host=pages[0];await host.locator('#mode-'+count).click();await host.locator('#create-room').click();const code=await host.locator('#room-code').innerText();
-        for(const page of pages.slice(1)) {await page.locator('#room-code-input').fill(code);await page.locator('#join-room').click();await page.locator('#room-code').waitFor();}
+        const host=pages[0];await openSetup(host,'create');await host.locator('#mode-'+count).click();await host.locator('#create-room').click();const code=await host.locator('#room-code').innerText();
+        for(const page of pages.slice(1)) {await openSetup(page,'join');await page.locator('#room-code-input').fill(code);await page.locator('#join-room').click();await page.locator('#room-code').waitFor();}
         await host.locator('#online-start').click();
         for(let color=0;color<4;color++) {
           const page=pages[color===3&&count===3?0:color];await page.locator('#hint').click();await page.locator('#confirm-move').click();
@@ -105,7 +106,7 @@ test('local bot play, hint cycling, undo, restore and full-game termination',asy
   try {
     const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.goto(`http://127.0.0.1:${app.server.address().port}`);
-    await page.locator('#mode-2').click();await page.locator('[data-seat-kind="1"]').selectOption('bot');await page.locator('#local-start').click();
+    await openSetup(page,'local');await page.locator('#mode-2').click();await page.locator('[data-seat-kind="1"]').selectOption('bot');await startLocal(page);
     await page.locator('#hint').click();await page.waitForFunction(()=>document.querySelector('#hint-status').textContent.includes('方案 1/'));
     const first=await page.locator('#preview').innerHTML(),piece=await page.locator('.piece.selected').getAttribute('data-piece');
     await page.locator('#hint').click();assert.notEqual(await page.locator('#preview').innerHTML(),first);
@@ -131,9 +132,9 @@ test('four-player team room with two humans and two bots starts directly and rem
   const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
   try {
     const a=await browser.newPage(),b=await browser.newPage(),base=`http://127.0.0.1:${app.server.address().port}`;
-    await a.goto(base);await a.locator('#game-mode').selectOption('teams');await a.locator('#create-room').click();
+    await a.goto(base);await openSetup(a,'create');await a.locator('#game-mode').selectOption('teams');await a.locator('#create-room').click();
     const code=await a.locator('#room-code').innerText();await a.locator('[data-add-bot="2"]').click();await a.locator('[data-add-bot="3"]').click();
-    await b.goto(base);await b.locator('#room-code-input').fill(code);await b.locator('#join-room').click();
+    await b.goto(base);await openSetup(b,'join');await b.locator('#room-code-input').fill(code);await b.locator('#join-room').click();
     assert.equal(await a.locator('#ready').count(),0);await a.locator('#online-start').click();
     await b.locator('#hint').waitFor();assert.equal(await a.locator('.team-cards article').count(),2);
     await a.locator('#hint').click();await a.locator('#confirm-move').click();
