@@ -1,4 +1,6 @@
 /** Deterministic rules shared by the browser and the authoritative server. */
+import { enumerateMoves } from './moves.mjs';
+import { normalizeMode, normalizeSeats } from './modes.mjs';
 export const SIZE = 20;
 export const COLORS = ['blue', 'yellow', 'red', 'green'];
 export const CORNERS = [[0,0],[19,0],[19,19],[0,19]];
@@ -55,9 +57,9 @@ export function variants(id) {
 export const pieceSize = id => byId.get(id)?.cells.length ?? 0;
 export const ownedColors = (players,seat) => players===2 ? [seat,seat+2] : [seat];
 
-export function newGame(players=4,scoring='bonus') {
+export function newGame(players=4,scoring='bonus',{mode,seats}={}) {
   if(![2,3,4].includes(players) || !['simple','bonus'].includes(scoring)) throw Error('INVALID_OPTIONS');
-  return {players,scoring,board:Array(400).fill(-1),remaining:Array.from({length:4},()=>PIECES.map(p=>p.id)),
+  return {players,scoring,mode:normalizeMode(players,mode),seats:normalizeSeats(players,seats),board:Array(400).fill(-1),remaining:Array.from({length:4},()=>PIECES.map(p=>p.id)),
     started:[false,false,false,false],stopped:[null,null,null,null],lastPiece:[null,null,null,null],
     resigned:Array(players).fill(false),turn:0,neutralCursor:0,status:'playing',revision:0,history:[]};
 }
@@ -91,29 +93,13 @@ export function validateMove(game,move,color=game.turn) {
 }
 
 /** Frontier search is exhaustive: every legal later move covers an own diagonal. */
-export function findMove(game,color=game.turn,preferredPiece=null) {
-  if(game.status!=='playing' || game.stopped[color]) return null;
-  const anchors=[];
-  if(!game.started[color]) anchors.push(CORNERS[color]);
-  else for(let y=0;y<SIZE;y++) for(let x=0;x<SIZE;x++) {
-    if(at(game,x,y)!==-1 || edges.some(([dx,dy])=>at(game,x+dx,y+dy)===color)) continue;
-    if(diagonals.some(([dx,dy])=>at(game,x+dx,y+dy)===color)) anchors.push([x,y]);
-  }
-  anchors.sort((a,b)=>(Math.abs(a[0]-9.5)+Math.abs(a[1]-9.5))-(Math.abs(b[0]-9.5)+Math.abs(b[1]-9.5)));
-  const ids=game.remaining[color].filter(id=>!preferredPiece||id===preferredPiece).slice().sort((a,b)=>pieceSize(b)-pieceSize(a));
-  for(const piece of ids) for(const {orientation,cells} of variants(piece)) {
-    const checked=new Set();
-    for(const [ax,ay] of anchors) for(const [dx,dy] of cells) {
-      const x=ax-dx,y=ay-dy,key=`${x},${y}`;
-      if(checked.has(key)) continue;checked.add(key);
-      const move={piece,orientation,x,y};
-      if(validateMove(game,move,color).ok) return move;
-    }
-  }
-  return null;
+export function legalMoves(game,color=game.turn,preferredPiece=null) {
+  return enumerateMoves(game,color,preferredPiece,{SIZE,CORNERS,variants,validateMove,pieceSize});
 }
+export function findMove(game,color=game.turn,preferredPiece=null) {return legalMoves(game,color,preferredPiece).next().value??null;}
 
 function settle(game) {
+  if(game.mode==='teams'&&[0,1].some(team=>[team,team+2].every(s=>game.resigned[s]))) {game.status='finished';return;}
   if(game.resigned.filter(v=>!v).length<=1) {game.status='finished';return;}
   for(let i=0;i<4;i++) {
     const color=game.turn;
@@ -126,14 +112,15 @@ function settle(game) {
   }
   game.status='finished';
 }
-export function applyMove(game,move,{automatic=false}={}) {
+export function applyMove(game,move,{automatic=false,source=automatic?'timeout':'human'}={}) {
   const result=validateMove(game,move);
   if(!result.ok) throw Error(result.code);
   const color=game.turn, player=controller(game),clean={piece:move.piece,orientation:move.orientation,x:move.x,y:move.y};
+  if(!['human','bot','timeout'].includes(source)) throw Error('INVALID_MOVE');
   for(const [x,y] of result.cells) game.board[y*SIZE+x]=color;
   game.remaining[color]=game.remaining[color].filter(id=>id!==move.piece);
   game.started[color]=true;game.lastPiece[color]=move.piece;
-  game.history.push({type:'move',color,player,move:clean,automatic:Boolean(automatic)});
+  game.history.push({type:'move',color,player,move:clean,automatic:source!=='human',source});
   game.revision++;
   if(color===3 && game.players===3) game.neutralCursor=(player+1)%3;
   if(game.remaining[color].length===0) game.stopped[color]='complete';
@@ -145,7 +132,7 @@ export function resign(game,player) {
   for(const c of ownedColors(game.players,player)) game.stopped[c]='resigned';
   game.history.push({type:'resign',player});game.revision++;settle(game);return game;
 }
-export function scores(game) {
+function individualScores(game) {
   const colorScores=game.remaining.map((ids,c)=>{
     const remaining=ids.reduce((n,id)=>n+pieceSize(id),0);
     return {color:c,remaining,placed:89-remaining,score:remaining?-remaining:(game.scoring==='bonus'?15+(game.lastPiece[c]==='I1'?5:0):0)};
@@ -159,20 +146,41 @@ export function scores(game) {
   if(game.status==='finished') for(const row of rows) row.winner=!row.resigned&&row.score===best;
   return rows;
 }
-export function exportReplay(game,names=[]) {
-  return {format:'djq-replay',version:1,players:game.players,scoring:game.scoring,
+export function teamScores(game) {
+  if(game.mode!=='teams') return [];
+  const individuals=individualScores(game),rows=[0,1].map(team=>{
+    const members=[team,team+2],parts=members.map(s=>individuals[s]);
+    return {team,members,score:parts.reduce((s,p)=>s+p.score,0),remaining:parts.reduce((s,p)=>s+p.remaining,0),
+      placed:parts.reduce((s,p)=>s+p.placed,0),forfeited:members.every(s=>game.resigned[s]),winner:false};
+  });
+  const best=Math.max(...rows.filter(s=>!s.forfeited).map(s=>s.score));
+  if(game.status==='finished') for(const row of rows) row.winner=!row.forfeited&&row.score===best;
+  return rows;
+}
+export function scores(game) {
+  const rows=individualScores(game);
+  if(game.mode==='teams') {const teams=teamScores(game);for(const row of rows) row.winner=!row.resigned&&teams[row.player%2].winner;}
+  return rows;
+}
+export function exportReplay(game,names=[],{seats=game.seats}={}) {
+  return {format:'djq-replay',version:2,players:game.players,scoring:game.scoring,mode:game.mode,seats:normalizeSeats(game.players,seats),
     names:Array.from({length:game.players},(_,i)=>String(names[i]??`P${i+1}`).slice(0,20)),actions:structuredClone(game.history)};
 }
 /** Replay is validated by actually executing every action; no imported board is trusted. */
 export function replay(record,steps=record?.actions?.length) {
-  if(!record||record.format!=='djq-replay'||record.version!==1||!Array.isArray(record.actions)||record.actions.length>88||
+  if(!record||record.format!=='djq-replay'||![1,2].includes(record.version)||!Array.isArray(record.actions)||record.actions.length>88||
     !Number.isInteger(steps)||steps<0||steps>record.actions.length) throw Error('INVALID_REPLAY');
-  const game=newGame(record.players,record.scoring);
+  if(record.version===2&&(!Object.hasOwn(record,'mode')||!Object.hasOwn(record,'seats'))) throw Error('INVALID_REPLAY');
+  const game=newGame(record.players,record.scoring,record.version===2?{mode:record.mode,seats:record.seats}:{});
   for(const action of record.actions.slice(0,steps)) {
     if(!action||typeof action!=='object') throw Error('INVALID_REPLAY');
     if(action.type==='move') {
       if(action.color!==game.turn || action.player!==controller(game)) throw Error('INVALID_REPLAY');
-      applyMove(game,action.move,{automatic:action.automatic===true});
+      const source=record.version===1?(action.automatic===true?'timeout':'human'):action.source;
+      if(!['human','bot','timeout'].includes(source)||(source==='bot'&&game.seats[action.player].kind!=='bot')||
+        (source==='human'&&game.seats[action.player].kind!=='human')||
+        (record.version===2&&action.automatic!==(source!=='human'))) throw Error('INVALID_REPLAY');
+      applyMove(game,action.move,{source});
     } else if(action.type==='resign') resign(game,action.player);
     else throw Error('INVALID_REPLAY');
   }

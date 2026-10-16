@@ -9,6 +9,12 @@ const root=fileURLToPath(new URL('../',import.meta.url));
 const staticFiles=new Map([
   ['/', ['public/index.html','text/html; charset=utf-8']],
   ['/app.mjs',['public/app.mjs','text/javascript; charset=utf-8']],
+  ['/placement.mjs',['public/placement.mjs','text/javascript; charset=utf-8']],
+  ['/analysis-client.mjs',['public/analysis-client.mjs','text/javascript; charset=utf-8']],
+  ['/analysis-worker.mjs',['public/analysis-worker.mjs','text/javascript; charset=utf-8']],
+  ['/shared/moves.mjs',['shared/moves.mjs','text/javascript; charset=utf-8']],
+  ['/shared/modes.mjs',['shared/modes.mjs','text/javascript; charset=utf-8']],
+  ['/shared/strategy.mjs',['shared/strategy.mjs','text/javascript; charset=utf-8']],
   ['/network.mjs',['public/network.mjs','text/javascript; charset=utf-8']],
   ['/i18n.mjs',['public/i18n.mjs','text/javascript; charset=utf-8']],
   ['/style.css',['public/style.css','text/css; charset=utf-8']],
@@ -71,7 +77,7 @@ export function createApp({store=new RoomStore(),requestLimit=240,creationLimit=
           const origin=req.headers.origin,expected=publicOrigin||`http://${req.headers.host}`;
           if((origin&&origin!==expected)||req.headers['sec-fetch-site']==='cross-site') throw new RoomError('ORIGIN_DENIED',403);
         }
-        if(pathname==='/api/health'&&req.method==='GET') {json(res,200,{ok:true,version:'1.0.0'});return;}
+        if(pathname==='/api/health'&&req.method==='GET') {json(res,200,{ok:true,version:'1.1.0'});return;}
         if(pathname==='/api/rooms'&&req.method==='POST') {
           rate(creations,ip,creationLimit,600000);json(res,201,store.create(await body(req)));return;
         }
@@ -133,7 +139,7 @@ if(process.argv[1]&&pathToFileURL(resolve(process.argv[1])).href===import.meta.u
   const port=Number(process.env.PORT??3000),host=process.env.HOST??'127.0.0.1';
   if(!Number.isInteger(port)||port<1||port>65535) throw Error('PORT must be between 1 and 65535');
   const app=createApp();
-  app.server.listen(port,host,()=>console.log(`DJQ v1.0.0 listening on http://${host}:${port}`));
+  app.server.listen(port,host,()=>console.log(`DJQ v1.1.0 listening on http://${host}:${port}`));
   app.server.on('error',error=>{console.error(error.message);app.shutdown();process.exitCode=1;});
   for(const signal of ['SIGINT','SIGTERM']) process.once(signal,()=>{app.shutdown();app.server.close();});
 }

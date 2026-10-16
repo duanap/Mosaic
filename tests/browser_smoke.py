@@ -71,8 +71,6 @@ class BrowserTests(unittest.TestCase):
         b.locator('#player-name').fill('Bob')
         b.locator('#room-code-input').fill(code)
         b.locator('#join-room').click()
-        b.locator('#ready').click()
-        a.locator('#ready').click()
         a.locator('#online-start').click()
         a.locator('#hint').click()
         a.locator('#confirm-move').click()
@@ -86,9 +84,7 @@ class BrowserTests(unittest.TestCase):
         a.locator('#resign').click()
         a.locator('#rematch').wait_for()
         a.locator('#rematch').click()
-        b.locator('#ready').wait_for()
-        a.locator('#ready').click()
-        b.locator('#ready').click()
+        b.locator('#room-code').wait_for()
         a.locator('#online-start').click()
         self.assertEqual(a.locator('#move-number').inner_text(), '0')
     def test_04_mobile_dock_keeps_confirmation_accessible(self):
@@ -107,6 +103,7 @@ class BrowserTests(unittest.TestCase):
         p.locator('#local-start').click()
         p.locator('#hint').focus()
         p.keyboard.press('Enter')
+        p.locator('#preview rect').first.wait_for()
         self.assertGreater(p.locator('#preview rect').count(), 0)
         p.locator('#board').focus()
         p.keyboard.press('Enter')
@@ -124,8 +121,6 @@ class BrowserTests(unittest.TestCase):
                 page.locator('#player-name').fill(f'Guest {index}')
                 page.locator('#room-code-input').fill(code)
                 page.locator('#join-room').click()
-            for page in pages:
-                page.locator('#ready').click()
             host.screenshot(path=str(ART / f'lobby-{count}.png'),full_page=True)
             host.locator('#online-start').click()
             for color in range(4):

@@ -1,4 +1,20 @@
-# V1.0.0 - 2026-10-14
+# V1.1.0 - 2026-10-16
+
+## Changes
+
+- Held drag replaces mouse-follow. Grab any solid square; short tap rotates around it. Whole-piece bounds apply to drag, arrows, rotation and flip. Release fixes preview, explicit confirmation commits; cancelled touch restores its origin.
+- Hints cycle unique legal placements, prioritize larger pieces, round-robin same-size shapes and include rotation/reflection, with candidate counts.
+- Four-player teams pair blue/red versus yellow/green and sum team scores. Each person retains their color. One resignation does not end the teammate's play.
+- Ready removed. Full rooms with connected humans start directly by host. Waiting empty seats can hold standard bots without token/event connections.
+- Standard position-aware bots run locally and online. Module Web Workers and a bounded server pool keep analysis off UI/request threads. Cancellation and instance/round/revision/epoch checks reject stale output. Bots cannot become host or keep abandoned rooms alive.
+- Local bot undo returns to the preceding human decision. V2 replays preserve mode/seat/source; V1 saves/replays remain readable.
+- Zero runtime npm dependencies. Refresh client/server together: the old ready protocol was removed. No production deployment performed.
+
+## Current verification boundary
+
+Native and real-origin Edge/Chromium browser suites cover actual HTTP/SSE, native storage, module workers, mouse/touch, legacy replay, teams and bots. Controlled bot benchmarks and a 12-room/two-worker concurrency exercise are recorded in VERIFICATION.json. Physical Android/iOS Safari, production TLS/CDN and large-scale load remain unverified. Author self-review; no independent review claimed.
+
+# V1.0.0 - 2026-10-14 (historical)
 
 ## Delivered scope
 2/3/4-player rules and Chinese responsive UI; local play, undo, restore and validated JSON replay; online room lifecycle, authenticated state streams, turn clocks, deterministic timeout moves, reconnect, resignation and rematch. Node 22+, zero npm dependencies, MIT project source. No account, database, ranking, multiplayer spectator service or general-purpose AI.

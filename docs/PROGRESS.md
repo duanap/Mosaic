@@ -1,4 +1,19 @@
 # Execution ledger
+
+## 2026-10-16 v1.1 follow-up
+
+- User requested reassessment/plan, then authorized implementation with “继续”. Implemented inline, without subagents, git publication or deployment.
+- Held-pointer interaction replaces hover-follow; real desktop and CDP-touch tests cover non-origin grabbing, rotation, cancellation and full-shape bounds.
+- Exhaustive lazy move generator preserves findMove ordering. Hints rank and round-robin piece variants with candidate counts. Workers isolate calculation and stale requests are discarded.
+- Explicit modes and four-player diagonal teams; per-color bonuses sum by team, single-member resignation preserves teammate. V2 replay and local bot seat restoration retain V1 compatibility.
+- Ready removed throughout room protocol, UI and tests. Host starts full/online rooms, with optional bot seats in waiting empty slots.
+- Standard strategy includes expansion, local free space, allied frontier protection and enemy routes; three-player public green considers the current controller's main color.
+- Browser module workers and bounded two-thread server pool; cancellation epochs reject pre-disconnect results even after reconnect; hard timeout/crash falls back legally.
+- Local bot undo/restore/full-game and real-worker online teams/rematch passed. Two fixed-seed 40-game duo benchmarks and 12-game mode benchmarks completed; report actual mode-specific evidence in VERIFICATION.json. These compare to the weak deterministic legacy baseline, not humans.
+- Current acceptance uses actual HTTP origins, CSP and native storage; the original about:blank bridge limitation below is historical. The legacy Python suite is optional and was not run in this host's Python environment.
+- Physical Android/iOS and production domain/TLS/CDN acceptance remain unperformed. No independent review is claimed. Original V1 ledger follows.
+
+## Historical V1 work
 - Repository inspected via connected GitHub tool: empty; initialized main with README (b3588207512e622ca4614fb1c4c05714752faac5).
 - Container cannot resolve github.com or registry.npmjs.org. Authorized GitHub writes will use the connector; local work is isolated under /mnt/data/djq.
 - Ruling: use native ES modules, Node HTTP and SSE, no dependencies. Cost: not the earlier Vue/TypeScript suggestion; migration remains possible because rules are isolated.

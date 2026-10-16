@@ -71,7 +71,7 @@ test('seat recovery in a browser with real storage and HTTP/SSE',async t=>{
       const ctx=await context(t),a=await page(ctx),code=await host(a);
       const b=await page(ctx);await b.locator('#player-name').fill('Bob');
       await b.locator('#room-code-input').fill(code);await b.locator('#join-room').click();
-      await b.locator('#ready').click();await a.locator('#ready').click();await a.locator('#online-start').click();
+      await a.locator('#online-start').click();
       await a.locator('#hint').click();await a.locator('#confirm-move').click();
       await b.waitForFunction(()=>document.querySelector('#move-number')?.textContent==='1');await b.close();
       const reopened=await page(ctx);await reopened.getByRole('button',{name:/Bob \/ /}).click();

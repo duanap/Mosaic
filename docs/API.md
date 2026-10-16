@@ -7,7 +7,7 @@ All HTTP API responses are JSON except the event stream. Errors are `{ "error": 
 | Method | Path | Authentication | Result |
 | --- | --- | --- | --- |
 | GET | /api/health | none | Health and application version |
-| POST | /api/rooms | none | Create with name, players (2/3/4), scoring (simple/bonus), turnSeconds (30/60/90/120) |
+| POST | /api/rooms | none | Create with name, players (2/3/4), mode (duo/trio/classic/teams), scoring (simple/bonus), turnSeconds (30/60/90/120) |
 | POST | /api/rooms/:code/join | none | Join with name |
 | GET | /api/rooms/:code | Bearer | Current personalized snapshot |
 | GET | /api/rooms/:code/events | Bearer | Authenticated fetch/SSE stream |
@@ -22,14 +22,19 @@ On HTTPS/localhost, Web Locks protect automatic reconnection from taking over a 
 
 ## Commands
 
-- `{"type":"ready","ready":true}`: waiting room only.
-- `{"type":"start"}`: host only; all seats connected and ready.
+- `{"type":"start"}`: host only; every seat occupied, all human seats connected. No ready command or snapshot readiness fields; old ready commands return INVALID_COMMAND. Missing seats return ROOM_NOT_FULL, offline human seats PLAYER_OFFLINE.
+- `{"type":"set-bot","seat":1,"level":"standard"}`: host only, waiting room, empty seat only. Creates a bot without token or event stream. No replacement of human seats.
+- `{"type":"remove-bot","seat":1}`: host only, waiting room, bot seat only; frees it for a friend.
 - `{"type":"move","round":1,"revision":0,"move":{"piece":"F5","orientation":0,"x":0,"y":0}}`: coordinates shown here illustrate the schema, not a guaranteed legal move. The server computes occupied cells from its own piece table.
 - `{"type":"resign","round":1,"revision":5}`: stop the actor's colors and exclude them from the winner set.
-- `{"type":"rematch"}`: finished room, host only; reset readiness before a fresh start.
+- `{"type":"rematch"}`: finished room, host only; return to waiting, retain bot configuration and present human seats, free departed seats, then host starts when full/online.
 - `{"type":"leave"}`: release waiting/finished seat, or resign an active seat and revoke the token.
 
 Move/resign require the exact game revision AND room round number. The revision increments for successful moves or resignations. A separate monotonic room `version` orders snapshots, including presence changes; clients ignore older snapshots. A new round increments `round`, preventing an old opening command from replaying in a rematch.
+
+Modes must match seat count: duo=2, trio=3, classic=4, teams=4. Omitted mode defaults to the legacy count-based mode. Teams are seats [0,2] versus [1,3]; each seat still owns one color. Snapshots include `mode` and player `kind: human | bot`; bots additionally have `level: standard` and connected=false. Bot seats do not require connection to start and cannot be authorized or promoted to host. Seat recovery remains human-only.
+
+Replay exports are version 2, with `mode`, sanitized `seats` (kind/level only), and move `source: human | bot | timeout`; `automatic` is source != human. No tokens or listeners are serialized. The reader accepts v1 records, mapping old automatic moves to timeout and choosing the legacy mode by player count. History is validated by replaying legal intents, including controller and source/seat compatibility.
 
 ## SSE
 
@@ -37,9 +42,11 @@ Use fetch with an Authorization header, not EventSource with a token in its URL.
 
 ## Rulings and retention
 
-No voluntary pass. Colors without a legal move are permanently blocked. Three-player neutral green rotates only after its actual moves; a player with a blocked primary color still controls green. Resigned players are excluded from neutral rotation. One remaining non-resigned player wins immediately.
+No voluntary pass. Colors without a legal move are permanently blocked. Three-player neutral green rotates only after its actual moves; a player with a blocked primary color still controls green. Resigned players are excluded from neutral rotation. One remaining non-resigned player wins immediately outside teams. In teams a single resignation stops only that seat; a wholly resigned team loses, otherwise final color scores are added by team, including resigned colors' remaining penalties.
 
 A timed-out turn receives the engine's first deterministic legal move, prioritizing large pieces. This is basic legal-move assistance, not a competitive AI. Current-controller disconnection caps the remaining deadline at 45 seconds; reconnect does not restore extra time. Unrelated resignations do not reset another player's clock.
+
+Bot seats use a distinct position-aware strategy. A bounded pool of two worker_threads evaluates candidates with a 400ms budget and 1000ms hard timeout. Failed or timed-out analysis falls back to a legal move. Results must match room instance, round, revision, turn, controller, configuration generation and cancellation epoch. Expired, duplicate and pre-disconnect results are rejected. Only the server applies online bot moves; no bot token is issued. All humans disconnected pauses new bot jobs and cancels current ones; bot activity never refreshes lastHuman. Human timeout rules remain active. Removing a room or shutting down terminates its work.
 
 Waiting disconnected seats are reclaimed after 120 seconds, and host ownership transfers. Rooms with no connections expire after 15 minutes without human activity; waiting and finished rooms expire after 30 minutes of inactivity / finish respectively. Every room has an 8-hour maximum lifetime. Service restart discards all rooms. Room count defaults to 100; no multi-process shared-state operation is supported.
 

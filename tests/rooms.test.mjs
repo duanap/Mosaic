@@ -7,17 +7,15 @@ function setup(count=2,options={}) {
   const a=store.create({name:'Alice',players:count,scoring:'bonus',turnSeconds:60});
   const seats=[a];for(let i=1;i<count;i++) seats.push(store.join(a.room.code,`P${i+1}`));
   const handles=seats.map(s=>store.connect(a.room.code,s.token,()=>{}));
-  seats.forEach(s=>store.command(a.room.code,s.token,{type:'ready',ready:true}));
   return {store,seats,handles,code:a.room.code,clock:v=>{time=v;}};
 }
 function start(x) {x.store.command(x.code,x.seats[0].token,{type:'start'});return x.store.snapshot(x.code,0);}
 function moveCommand(s) {return {type:'move',round:s.round,revision:s.game.revision,move:findMove(s.game)};}
-test('room creation, capacity, readiness and host-only start',()=>{
+test('room creation, capacity, presence and host-only start',()=>{
   const x=setup(); assert.throws(()=>x.store.join(x.code,'full'),/ROOM_FULL/);
   assert.throws(()=>x.store.command(x.code,x.seats[1].token,{type:'start'}),/HOST_ONLY/);
-  x.store.command(x.code,x.seats[1].token,{type:'ready',ready:false});
-  assert.throws(()=>start(x),/NOT_READY/);
-  x.store.command(x.code,x.seats[1].token,{type:'ready',ready:true});assert.equal(start(x).phase,'playing');
+  x.handles[1]();assert.throws(()=>start(x),/PLAYER_OFFLINE/);
+  x.store.connect(x.code,x.seats[1].token,()=>{});assert.equal(start(x).phase,'playing');
 });
 test('snapshot never discloses tokens and unauthorized access is refused',()=>{
   const x=setup(); const snapshot=JSON.stringify(x.store.snapshot(x.code,0));
@@ -50,14 +48,13 @@ test('primary blocked seat still controls neutral green in three-player room',()
   const s=x.store.snapshot(x.code);assert.equal(controller(s.game),0);
   x.store.command(x.code,x.seats[0].token,moveCommand(s));assert.equal(x.store.snapshot(x.code).game.neutralCursor,1);
 });
-test('resignation, rematch readiness, and old-round commands',()=>{
+test('resignation, rematch without readiness, and old-round commands',()=>{
   const x=setup();const s=start(x);const old=moveCommand(s);
   x.store.command(x.code,x.seats[0].token,{type:'resign',round:s.round,revision:s.game.revision});
   assert.equal(x.store.snapshot(x.code).phase,'finished');
   x.store.command(x.code,x.seats[0].token,{type:'rematch'});
   assert.equal(x.store.snapshot(x.code).phase,'waiting');
-  assert.throws(()=>start(x),/NOT_READY/);
-  x.seats.forEach(v=>x.store.command(x.code,v.token,{type:'ready',ready:true}));const n=start(x);
+  const n=start(x);
   assert.notEqual(n.round,s.round);assert.throws(()=>x.store.command(x.code,x.seats[0].token,old),/STALE_STATE/);
 });
 test('waiting leave transfers host, revokes token, and removes empty rooms',()=>{

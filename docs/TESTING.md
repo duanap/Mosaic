@@ -1,31 +1,40 @@
-# Verification and test reproduction
+# Test and verification reproduction
 
-## Native suite
+## Native tests and distribution
 
-`npm run verify` runs syntax/import checks, all Node tests, and distribution generation. Tests use node:test and built-in HTTP/fetch. No npm dependency install, cloud CI or paid service is required. The suite covers rules, rooms, request security, actual HTTP/SSE integration, and client stream-lifecycle races.
+`npm run verify` runs syntax/import checks, all `tests/*.test.mjs` tests, then builds `dist/`. Node >=22; no dependency installation required. Browser suites are separate because Playwright/Chromium is optional.
 
-Important cases: exact 21-piece inventory and 89-cell conservation; unique rotations/reflections; boundary/overlap/edge/corner failures; separate-color ownership; neutral control; scoring and ties; full game termination; independent exhaustive move-search oracle; stale round/revision rejection; private tokens; waiting-seat reclamation; disconnect deadlines; timeout moves; real SSE snapshots; malformed JSON, large bodies and request limits; old stream cleanup isolation.
+Coverage includes piece inventory/area, all transforms, exhaustive search oracle, whole-shape bounds and grab offsets, teams/resignation, V1/V2 replay, private auth, start without ready, bot permissions, stale/duplicate/late results, disconnect epochs, timeouts, worker cancellation/crash, real workers, HTTP/SSE, recovery storage and stream races.
 
-Seat recovery regressions also cover persistent storage, legacy session migration, multiple saved seats, per-seat cleanup, expired/malformed records, storage denial, transient failures, and preserving shared recovery on stream replacement.
+## Direct browser suites
 
-## Browser suite
+Use an existing Node Playwright package and Chromium/Edge installation. If normally resolvable, run `npm run test:browser`. For an external installation on Windows:
 
-For the direct-browser seat recovery suite, make the optional Node `playwright` package and Chromium available, then run `node --test tests/browser_recovery.mjs`. `CHROMIUM_PATH` may point to an installed Chromium/Edge executable; `DJQ_PLAYWRIGHT_MODULE` may point to an existing Playwright package directory. The test starts its own local server on an ephemeral loopback port. It checks actual localStorage/sessionStorage, closing/reopening tabs, restarting the browser process, resuming an active game, explicit recovery without automatic takeover (including copied tab credentials, with and without Web Locks), separate seats in one browser, safe recovery labels, temporary API failures, invalid-room cleanup, the repository link, and mobile layout. It writes `artifacts/browser/recovery-mobile.png` and needs no production server or browser bridge.
-
-With Python Playwright and Chromium available, start the server and run:
-
-```sh
-python tests/browser_smoke.py
+```powershell
+$env:DJQ_PLAYWRIGHT_MODULE = 'C:/path/to/node_modules/playwright'
+$env:CHROMIUM_PATH = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'
+npm run test:browser
 ```
 
-Set CHROMIUM_PATH if Chromium is not on PATH. DJQ_BASE_URL defaults to http://127.0.0.1:3000. Screenshot output defaults to artifacts/browser, ignored by Git. Browser tests cover local move/undo/reload, mobile layout and fixed action dock, keyboard operation, online 2/3/4-player turns, reconnect/rematch, safe replay import, and a complete local game.
+Both `tests/browser_gameplay.mjs` and `tests/browser_recovery.mjs` start real local servers on ephemeral ports, with actual CSP, native storage, HTTP/SSE and module Workers. Current acceptance uses no bridge or emulated storage. Optional browser packages are not production dependencies.
 
-This development container's installed Chromium blocks all URL navigation by policy. The policy was left unchanged. The browser suite was run using the included in-memory harness:
+Coverage: hover/held drag/tap rotation; multi-square non-origin grabbing; native Chromium CDP touch and cancellation rollback; bounds/flip/arrows; manual four-color opening; focused Enter; dark theme; hint cycling; local full bot game/undo/reload/rematch; 3/4 human online and neutral green; team game with 2 humans/2 bots; team resignation/rematch; safe/invalid V1 replay import; native recovery, browser restart, multi-tab Web Locks, and temporary failures. Screenshots: ignored `artifacts/browser/`.
+
+The optional legacy `tests/browser_smoke.py` requires Python Playwright and a separately running server. V1.1 acceptance uses the Node suites, including equivalent keyboard/replay/mode paths. The historical about:blank bridge cannot verify module Workers/CSP and is not used for current acceptance.
+
+## Strategy and concurrency benchmarks
 
 ```sh
-DJQ_BROWSER_BRIDGE=1 python tests/browser_smoke.py
+node scripts/benchmark-bots.mjs --games 40 --seed 20261016 --mode duo --output artifacts/bots/duo.json
+node scripts/benchmark-bots.mjs --games 40 --seed 73011 --mode duo --output artifacts/bots/duo-holdout.json
+node scripts/benchmark-bots.mjs --games 12 --seed 20261016 --mode teams --output artifacts/bots/teams.json
+node scripts/benchmark-bots.mjs --games 12 --seed 20261016 --mode classic --output artifacts/bots/classic.json
+node scripts/benchmark-bots.mjs --games 12 --seed 20261016 --mode trio --output artifacts/bots/trio.json
+node scripts/benchmark-rooms.mjs
 ```
 
-This renders the actual local HTML/CSS/application JavaScript in Chromium's about:blank and relays its fetch and SSE calls to the real Node server through Python/httpx. Browser storage is emulated for reload testing in this opaque origin. It verifies actual UI flows and real HTTP/SSE messages, but does NOT verify direct browser navigation, browser-enforced CSP/same-origin behavior, real storage quotas, TLS or a production reverse proxy. The native HTTP tests independently verify security header values and origin rejection. Run the direct suite and the deployment checklist on the real hostname for those remaining environment-specific checks.
+Seeds affect near-ties only, so many games may share deterministic opening lines. These are controlled comparisons to the weak old deterministic baseline, not independent human-strength trials. The baseline chooses the first legal move with big-piece priority. Seats rotate; draws split a point among tied winners. Reports include scores, area and evaluation p50/p95/max. Online queue/cold worker startup/network timings are separate. The room benchmark reports health-request and bot-broadcast timings across 12 rooms sharing two real threads.
 
-The harness is test-only and is not imported by the production app. It requires the optional Python packages playwright and httpx. No browser driver or third-party package is copied into the repository.
+## Remaining acceptance
+
+Chromium touch simulation is not physical Android or iOS Safari. Check grabbing every solid region, holes, short tap, four edges, scrolling outside board, dock confirmation, orientation changes and cancellation/multiple fingers on actual devices. Record device/browser and outcomes. Repeat bot/team/recovery flows through actual HTTPS/reverse proxy/CDN. Local validation does not deploy or verify production infrastructure.

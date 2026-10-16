@@ -19,6 +19,10 @@ test('health, security headers, static path boundary and unknown methods',async 
   const {base,request}=await run(t);
   const health=await request('/api/health');assert.equal(health.body.ok,true);assert.equal(health.headers.get('cache-control'),'no-store');
   const page=await fetch(base+'/');assert.equal(page.status,200);assert.ok(page.headers.get('content-security-policy').includes("frame-ancestors 'none'"));
+  for(const path of ['/placement.mjs','/analysis-client.mjs','/analysis-worker.mjs','/shared/moves.mjs','/shared/modes.mjs','/shared/strategy.mjs']) {
+    const asset=await fetch(base+path);assert.equal(asset.status,200);assert.match(asset.headers.get('content-type'),/javascript/);
+  }
+  for(const path of ['/server/bot-worker.mjs','/server/bots.mjs','/package.json']) assert.equal((await fetch(base+path)).status,404);
   for(const path of ['/server/index.mjs','/.env','/../package.json','/shared/../server/rooms.mjs']) assert.equal((await fetch(base+path)).status,404);
   assert.equal((await fetch(base+'/api/health',{method:'DELETE'})).status,405);
 });
@@ -52,7 +56,7 @@ test('authenticated SSE receives a current snapshot and can reconnect',async t=>
 test('two clients play through real HTTP and replay export contains only game data',async t=>{
   const {app,request}=await run(t);const a=(await request('/api/rooms',{name:'A',players:2})).body;
   const code=a.room.code,b=(await request(`/api/rooms/${code}/join`,{name:'B'})).body;
-  for(const p of [a,b]) {app.store.connect(code,p.token,()=>{});await request(`/api/rooms/${code}/commands`,{type:'ready',ready:true},p.token);}
+  for(const p of [a,b]) {app.store.connect(code,p.token,()=>{});}
   let state=(await request(`/api/rooms/${code}/commands`,{type:'start'},a.token)).body;
   const command={type:'move',round:state.round,revision:state.game.revision,move:findMove(state.game)};
   assert.equal((await request(`/api/rooms/${code}/commands`,command,b.token)).status,403);

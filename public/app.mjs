@@ -1,14 +1,20 @@
 import { PIECES, COLORS, CORNERS, transform, newGame, validateMove, applyMove, findMove,
-  controller, scores, resign, replay, exportReplay, pieceSize, ownedColors } from '/shared/rules.mjs';
+  controller, scores, teamScores, resign, replay, exportReplay, pieceSize, ownedColors } from '/shared/rules.mjs';
 import { RoomClient, savedSession, savedSessions } from '/network.mjs';
 import { t } from '/i18n.mjs';
+import { clampOrigin, hitPreview, rotatePreview, flipPreview, initialPreview, beginGesture, moveGesture, endGesture } from '/placement.mjs';
+import { AnalysisClient } from '/analysis-client.mjs';
 
 const $=selector=>document.querySelector(selector);
 const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const read=(key,fallback=null)=>{try{return JSON.parse(localStorage.getItem(key))??fallback;}catch{return fallback;}};
 const write=(key,value)=>{try{localStorage.setItem(key,JSON.stringify(value));return true;}catch{return false;}};
 const LOCAL='djq-local-v1';
-const ui={view:'home',mode:'local',count:4,scoring:'bonus',seconds:90,name:read('djq-name',`${t('player')}${Math.floor(Math.random()*900)+100}`),
+const analysis=new AnalysisClient();
+const botAnalysis=new AnalysisClient();
+let hintMoves=null,hintIndex=0,hintLabel='',analysisGeneration=0,hintPending=false;
+let botGeneration=0,botKey=null;
+const ui={view:'home',mode:'local',count:4,variant:'classic',seatKinds:['human','human','human','human'],scoring:'bonus',seconds:90,name:read('djq-name',`${t('player')}${Math.floor(Math.random()*900)+100}`),
   joinCode:new URLSearchParams(location.search).get('room')?.toUpperCase().slice(0,6)??'',
   game:null,room:null,names:[],selected:null,orientation:0,cursor:null,showCorners:false,pending:false,connected:false,
   replayRecord:null,replayStep:0,clockOffset:0,recoveries:[],theme:read('djq-theme',matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')};
@@ -33,12 +39,24 @@ const playerName=i=>ui.names[i]??`${t('player')} ${i+1}`;
 const busy=()=>ui.pending?' disabled':'';
 let toastTimer;
 function toast(message) {const node=$('#toast');node.textContent=message;node.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>node.hidden=true,4200);}
-function resetSelection() {ui.selected=null;ui.orientation=0;ui.cursor=null;}
+function resetSelection() {analysis.cancel();analysisGeneration++;botAnalysis.cancel();botGeneration++;botKey=null;hintMoves=null;hintIndex=0;hintLabel='';hintPending=false;drag=null;ui.selected=null;ui.orientation=0;ui.cursor=null;}
+function setPreview(move) {ui.selected=move.piece;ui.orientation=move.orientation;ui.cursor={x:move.x,y:move.y};}
+function manualPreview() {hintLabel='';if(hintPending){analysis.cancel();analysisGeneration++;hintPending=false;}}
+const selectedMode=()=>ui.count===4?ui.variant:ui.count===2?'duo':'trio';
+const modeLabel=game=>game.mode==='teams'?'四人双色组队':game.mode==='classic'?'四人各自计分':t('mode'+game.players);
+function modeSettings() {return ui.count===4?`<label class="inline-field mode-settings">四人玩法<select id="game-mode"><option value="classic" ${ui.variant==='classic'?'selected':''}>四人各自计分</option><option value="teams" ${ui.variant==='teams'?'selected':''}>两队双色 · 蓝红 / 黄绿</option></select></label>`:'';}
+function localSeats() {return `<fieldset class="local-seats"><legend>同屏玩家 / 机器人</legend>${Array.from({length:ui.count},(_,i)=>`<label><span>${t('player')} ${i+1} ${ownedColors(ui.count,i).map(badge).join('')}${selectedMode()==='teams'?` / ${i%2?'B':'A'}队`:''}</span><select data-seat-kind="${i}" ${i===0?'disabled':''}><option value="human" ${ui.seatKinds[i]==='human'?'selected':''}>真人</option><option value="bot" ${ui.seatKinds[i]==='bot'?'selected':''}>机器人 · 标准</option></select></label>`).join('')}</fieldset>`;}
+function syncTray() {
+  const selected=document.querySelector('[data-piece="'+ui.selected+'"]');
+  if(selected) selected.innerHTML=miniPiece(ui.selected,ui.orientation)+`<span>${ui.selected}</span>`;
+}
 function captureOptions() {
   if($('#player-name')) ui.name=$('#player-name').value;
   if($('#room-code-input')) ui.joinCode=$('#room-code-input').value;
   if($('#scoring')) ui.scoring=$('#scoring').value;
   if($('#turn-seconds')) ui.seconds=Number($('#turn-seconds').value);
+  if($('#game-mode')) ui.variant=$('#game-mode').value;
+  document.querySelectorAll('[data-seat-kind]').forEach(node=>ui.seatKinds[Number(node.dataset.seatKind)]=node.value);
 }
 function header() {
   return `<header class="site-header"><button id="home-button" class="brand" aria-label="${t('home')}"><span class="brand-mark"><i></i><i></i><i></i><i></i></span><strong>${t('title')}</strong><span class="brand-label">DJQ</span></button>
@@ -66,34 +84,36 @@ function homeView() {
   return `<main class="home-shell"><section class="hero"><div class="hero-copy"><p class="eyebrow"><span class="live-dot"></span> SMALL BOARD. BIG POSSIBILITIES.</p><h1>${t('hero')}</h1><p class="lead">${t('intro')}</p><div class="quick-rules">${[1,2,3].map(n=>`<span><b>0${n}</b>${t('tip'+n)}</span>`).join('')}</div></div>
   <div class="hero-art"><div class="art-orbit"></div><div class="hero-board-wrap">${boardSVG(demo,false)}</div><div class="art-tag"><span class="tag-block">21</span><span>${t('tiles')} / ${t('perColor')}<small>89 LITTLE SQUARES</small></span></div><span class="art-caption">A NEW ANGLE ON EVERY MOVE.</span></div></section>
   <section class="play-section"><div class="section-heading"><div><p class="eyebrow">01 / LET'S PLAY</p><h2>${t('chooseMode')}</h2></div><div class="mode-switch" aria-label="${t('chooseMode')}">${[2,3,4].map(n=>`<button id="mode-${n}" data-count="${n}" class="${ui.count===n?'selected':''}" aria-pressed="${ui.count===n}"><strong>${n}<small>${t('people')}</small></strong><span>${t('mode'+n)}</span></button>`).join('')}</div></div>
-  <div class="play-cards"><article class="play-card local-card"><div class="card-top"><span class="card-icon">${icon('users')}</span><span class="eyebrow">SAME SCREEN</span></div><h3>${t('localTitle')}</h3><p>${t('localDesc')}</p><label class="inline-field">${t('scoring')}<select id="scoring"><option value="bonus" ${ui.scoring==='bonus'?'selected':''}>${t('bonus')} +15 / +20</option><option value="simple" ${ui.scoring==='simple'?'selected':''}>${t('simple')}</option></select></label><button id="local-start" class="button primary wide">${t('localStart')}${icon('arrow')}</button>${read(LOCAL)?`<button id="resume-local" class="text-button resume">${t('resume')}${icon('back')}</button>`:`<p class="fine">${t('saved')}</p>`}</article>
+  ${modeSettings()}<div class="play-cards"><article class="play-card local-card"><div class="card-top"><span class="card-icon">${icon('users')}</span><span class="eyebrow">SAME SCREEN</span></div><h3>${t('localTitle')}</h3><p>${t('localDesc')}</p>${localSeats()}<label class="inline-field">${t('scoring')}<select id="scoring"><option value="bonus" ${ui.scoring==='bonus'?'selected':''}>${t('bonus')} +15 / +20</option><option value="simple" ${ui.scoring==='simple'?'selected':''}>${t('simple')}</option></select></label><button id="local-start" class="button primary wide">${t('localStart')}${icon('arrow')}</button>${read(LOCAL)?`<button id="resume-local" class="text-button resume">${t('resume')}${icon('back')}</button>`:`<p class="fine">${t('saved')}</p>`}</article>
   <article class="play-card online-card"><div class="card-top"><span class="card-icon">${icon('link')}</span><span class="eyebrow">PLAY TOGETHER</span></div><h3>${t('onlineTitle')}</h3><p>${t('onlineDesc')}</p><div class="online-fields"><label>${t('name')}<input id="player-name" maxlength="20" autocomplete="nickname" value="${escape(ui.name)}"></label><label>${t('turnLimit')}<select id="turn-seconds">${[30,60,90,120].map(n=>`<option value="${n}" ${ui.seconds===n?'selected':''}>${n} ${t('seconds')}</option>`).join('')}</select></label></div><div class="online-actions"><button id="create-room" class="button secondary"${busy()}>${t('create')}${icon('arrow')}</button><div class="join-field"><input id="room-code-input" maxlength="6" autocomplete="off" aria-label="${t('code')}" placeholder="${t('code')}" value="${escape(ui.joinCode)}"><button id="join-room" class="text-button"${busy()}>${t('join')}</button></div></div></article></div></section>
-  ${recoveryView()}<footer class="home-footer"><span>DJQ / v1.0.0 <i></i>${t('footer')}</span><button id="import-replay" class="text-button">${t('import')}${icon('arrow')}</button></footer></main>`;
+  ${recoveryView()}<footer class="home-footer"><span>DJQ / v1.1.0 <i></i>${t('footer')}</span><button id="import-replay" class="text-button">${t('import')}${icon('arrow')}</button></footer></main>`;
 }
 function connectionLabel() {return `<span id="connection" class="connection ${ui.connected?'connected':''}"><i></i>${t(ui.connected?'connected':'reconnecting')}</span>`;}
 function lobbyView() {
-  const r=ui.room,me=r.players[r.you],allReady=r.players.every(p=>p?.ready&&p.connected),host=r.you===r.host;
-  return `<main class="lobby-shell"><div class="lobby-intro"><p class="eyebrow">YOUR TABLE IS READY</p><h1>${t('lobbyTitle')}</h1><p>${t('lobbyDesc')}</p></div><div class="lobby-grid"><section class="lobby-main panel"><div class="lobby-code"><div><span class="eyebrow">${t('code')}</span><strong id="room-code">${r.code}</strong></div><button id="copy-invite" class="button secondary">${icon('link')}${t('invite')}</button></div><div class="lobby-seats">${r.players.map((p,i)=>`<div class="lobby-seat ${p?'':'empty'}"><div class="seat-avatar c${i}">${i+1}</div><div class="seat-name"><strong>${p?escape(p.name):t('empty')}</strong><span>${p?`${ownedColors(r.capacity,i).map(badge).join('')} ${i===r.host?t('host'):''} ${i===r.you?` / ${t('you')}`:''}`:'- - -'}</span></div><span class="seat-status ${p?.ready?'is-ready':''}">${p?t(!p.connected?'offline':p.ready?'readyDone':'waiting'):''}</span></div>`).join('')}</div><div class="lobby-buttons"><button id="ready" class="button ${me?.ready?'secondary':'primary'}" ${!ui.connected||ui.pending?'disabled':''}>${icon('check')}${t(me?.ready?'unready':'ready')}</button>${host?`<button id="online-start" class="button primary" ${!allReady||!ui.connected||ui.pending?'disabled':''}>${t('start')}${icon('arrow')}</button>`:''}</div></section><aside class="panel lobby-aside"><p class="eyebrow">TABLE SETTINGS</p><h2>${r.capacity} ${t('people')} / ${t('mode'+r.capacity)}</h2><dl><div><dt>BOARD</dt><dd>20 &times; 20</dd></div><div><dt>${t('scoring')}</dt><dd>${t(r.scoring)}</dd></div><div><dt>${t('turnLimit')}</dt><dd>${r.turnSeconds} ${t('seconds')}</dd></div></dl><p>${t(r.capacity===3?'neutralHelp':'ruleFirst')}</p>${connectionLabel()}<button id="leave-room" class="text-button">${icon('back')}${t('home')}</button></aside></div></main>`;
+  const r=ui.room,host=r.you===r.host,full=r.players.every(p=>p&&!p.left),online=r.players.every(p=>p&&(p.kind==='bot'||p.connected));
+  return `<main class="lobby-shell"><div class="lobby-intro"><p class="eyebrow">YOUR TABLE</p><h1>${t('lobbyTitle')}</h1><p>${t('lobbyDesc')}</p></div><div class="lobby-grid"><section class="lobby-main panel"><div class="lobby-code"><div><span class="eyebrow">${t('code')}</span><strong id="room-code">${r.code}</strong></div><button id="copy-invite" class="button secondary">${icon('link')}${t('invite')}</button></div><div class="lobby-seats">${r.players.map((p,i)=>`<div class="lobby-seat ${p?'':'empty'}"><div class="seat-avatar c${i}">${i+1}</div><div class="seat-name"><strong>${p?escape(p.name):t('empty')}${r.mode==='teams'?` / ${i%2?'B':'A'}队`:''}</strong><span>${ownedColors(r.capacity,i).map(badge).join('')} ${i===r.host?t('host'):''} ${i===r.you?` / ${t('you')}`:''}</span></div><span class="seat-status">${p?p.kind==='bot'?'标准机器人':t(p.connected?'connected':'offline'):''}</span>${host&&!p?`<button class="button secondary small" data-add-bot="${i}"${busy()}>添加机器人</button>`:''}${host&&p?.kind==='bot'?`<button class="text-button" data-remove-bot="${i}"${busy()}>移除</button>`:''}</div>`).join('')}</div><div class="lobby-buttons">${host?`<button id="online-start" class="button primary" ${!full||!online||!ui.connected||ui.pending?'disabled':''}>${t('start')}${icon('arrow')}</button>`:`<span>${t('waitHost')}</span>`}<p class="fine">${!full?'等待朋友加入，或添加机器人补齐空位':!online?'等待真人玩家重新连接':'玩家已就位，由房主开始'}</p></div></section><aside class="panel lobby-aside"><p class="eyebrow">TABLE SETTINGS</p><h2>${r.capacity} ${t('people')} / ${r.mode==='teams'?'双色组队':t('mode'+r.capacity)}</h2><dl><div><dt>BOARD</dt><dd>20 &times; 20</dd></div><div><dt>${t('scoring')}</dt><dd>${t(r.scoring)}</dd></div><div><dt>${t('turnLimit')}</dt><dd>${r.turnSeconds} ${t('seconds')}</dd></div></dl><p>${r.mode==='teams'?'蓝红为A队，黄绿为B队。每人控制自己的颜色，按队伍总分结算。':t(r.capacity===3?'neutralHelp':'ruleFirst')}</p>${connectionLabel()}<button id="leave-room" class="text-button">${icon('back')}${t('home')}</button></aside></div></main>`;
 }
-function canPlay() {return ui.view==='game'&&ui.game?.status==='playing'&&!ui.pending&&(ui.mode==='local'||(ui.connected&&ui.room?.you===controller(ui.game)));}
+function canPlay() {return ui.view==='game'&&ui.game?.status==='playing'&&!ui.pending&&(ui.mode==='local'?ui.game.seats[controller(ui.game)].kind==='human':(ui.connected&&ui.room?.you===controller(ui.game)));}
 function playerCards(game) {
   return `<div class="player-cards players-${game.players}">${scores(game).map(s=>{
     const active=game.status==='playing'&&controller(game)===s.player;
-    return `<article class="player-card ${active?'active':''} ${s.resigned?'forfeited':''}"><div class="player-ident"><span class="player-avatar c${active?game.turn:s.colors[0]}">${s.player+1}</span><div><strong>${escape(playerName(s.player))}${ui.mode==='online'&&ui.room?.you===s.player?`<small> / ${t('you')}</small>`:''}</strong><div class="player-colors">${s.colors.map(c=>`${badge(c)}${game.stopped[c]?`<span class="stopped-text">${t(game.stopped[c])}</span>`:''}`).join('')}</div></div></div><div class="player-score"><strong>${s.score>0?'+':''}${s.score}</strong><span>${s.remaining} ${t('squares')}${t('remaining')}</span></div></article>`;
+    return `<article class="player-card ${active?'active':''} ${s.resigned?'forfeited':''}"><div class="player-ident"><span class="player-avatar c${active?game.turn:s.colors[0]}">${s.player+1}</span><div><strong>${escape(playerName(s.player))}${game.mode==='teams'?` / ${s.player%2?'B':'A'}队`:''}${ui.mode==='online'&&ui.room?.you===s.player?`<small> / ${t('you')}</small>`:''}</strong><div class="player-colors">${s.colors.map(c=>`${badge(c)}${game.stopped[c]?`<span class="stopped-text">${t(game.stopped[c])}</span>`:''}`).join('')}</div></div></div><div class="player-score"><strong>${s.score>0?'+':''}${s.score}</strong><span>${s.remaining} ${t('squares')}${t('remaining')}</span></div></article>`;
   }).join('')}</div>`;
 }
 function controls(game) {
   const active=game.turn,allowed=canPlay(),remaining=game.remaining[active];
   if(ui.view==='replay') return `<aside class="control-panel panel"><p class="eyebrow">REPLAY / READ ONLY</p><h2>${t('replay')}</h2><p>${t('replayHelp')}</p><div class="replay-progress"><strong id="replay-label">${ui.replayStep} / ${ui.replayRecord.actions.length}</strong><input id="replay-range" aria-label="${t('replay')}" type="range" min="0" max="${ui.replayRecord.actions.length}" value="${ui.replayStep}"></div><div class="replay-buttons"><button id="replay-prev" class="button secondary" ${ui.replayStep===0?'disabled':''}>${icon('back')}${t('prev')}</button><button id="replay-next" class="button primary" ${ui.replayStep===ui.replayRecord.actions.length?'disabled':''}>${t('next')}${icon('arrow')}</button></div>${moveLog(game)}</aside>`;
-  return `<aside class="control-panel panel"><div class="control-heading"><div><p class="eyebrow">YOUR PIECES</p><h2>${game.status==='finished'?t('finished'):t('choosePiece')}</h2></div><span class="remaining-pill c${active}">${remaining.length}<small> / 21</small></span></div><div class="tool-row"><button id="rotate" class="tool-button" ${!allowed||!ui.selected?'disabled':''}>${icon('rotate')}${t('rotate')}<kbd>R</kbd></button><button id="flip" class="tool-button" ${!allowed||!ui.selected?'disabled':''}>${icon('flip')}${t('flip')}<kbd>F</kbd></button><button id="hint" class="tool-button" ${!allowed?'disabled':''}>${icon('hint')}${t('hint')}</button></div><div class="piece-tray c${active}">${PIECES.slice().reverse().map(p=>`<button class="piece ${ui.selected===p.id?'selected':''} ${remaining.includes(p.id)?'':'used'}" data-piece="${p.id}" aria-label="${p.id} / ${p.cells.length} ${t('squares')}" aria-pressed="${ui.selected===p.id}" ${!allowed||!remaining.includes(p.id)?'disabled':''}>${miniPiece(p.id,ui.selected===p.id?ui.orientation:0)}<span>${p.id}</span></button>`).join('')}</div><div class="preview-info"><span id="preview-status" role="status" aria-live="polite">${t('chooseHelp')}</span><button id="clear-selection" class="icon-button" aria-label="${t('clear')}">${icon('close')}</button></div><button id="confirm-move" class="button primary wide confirm-button" disabled>${icon('check')}${t('confirm')}</button><p class="keyboard-help">${t('shortcut')}</p><div class="secondary-actions">${ui.mode==='local'?`<button id="undo" class="text-button" ${!game.history.length?'disabled':''}>${icon('back')}${t('undo')}</button>`:''}${game.status==='playing'?`<button id="resign" class="text-button danger" ${ui.pending||ui.mode==='online'&&(!ui.connected||game.resigned[ui.room.you])?'disabled':''}>${t('resign')}</button>`:''}</div>${moveLog(game)}</aside>`;
+  return `<aside class="control-panel panel"><div class="control-heading"><div><p class="eyebrow">YOUR PIECES</p><h2>${game.status==='finished'?t('finished'):t('choosePiece')}</h2></div><span class="remaining-pill c${active}">${remaining.length}<small> / 21</small></span></div><div class="tool-row"><button id="rotate" class="tool-button" ${!allowed||!ui.selected?'disabled':''}>${icon('rotate')}${t('rotate')}<kbd>R</kbd></button><button id="flip" class="tool-button" ${!allowed||!ui.selected?'disabled':''}>${icon('flip')}${t('flip')}<kbd>F</kbd></button><button id="hint" class="tool-button" ${!allowed?'disabled':''}>${icon('hint')}${t('hint')}</button></div><div class="piece-tray c${active}">${PIECES.slice().reverse().map(p=>`<button class="piece ${ui.selected===p.id?'selected':''} ${remaining.includes(p.id)?'':'used'}" data-piece="${p.id}" aria-label="${p.id} / ${p.cells.length} ${t('squares')}" aria-pressed="${ui.selected===p.id}" ${!allowed||!remaining.includes(p.id)?'disabled':''}>${miniPiece(p.id,ui.selected===p.id?ui.orientation:0)}<span>${p.id}</span></button>`).join('')}</div><div class="preview-info"><span id="preview-status" role="status" aria-live="polite">${t('chooseHelp')}</span><button id="clear-selection" class="icon-button" aria-label="${t('clear')}">${icon('close')}</button></div><button id="confirm-move" class="button primary wide confirm-button" disabled>${icon('check')}${t('confirm')}</button><p class="keyboard-help">${t('shortcut')}</p><div class="secondary-actions">${ui.mode==='local'?`<button id="undo" class="text-button" ${!game.history.length?'disabled':''}>${icon('back')}${t('undo')}</button>`:''}${game.status==='playing'?`<button id="resign" class="text-button danger" ${ui.pending||ui.mode==='local'&&!canPlay()||ui.mode==='online'&&(!ui.connected||game.resigned[ui.room.you])?'disabled':''}>${t('resign')}</button>`:''}</div>${moveLog(game)}</aside>`;
 }
 function moveLog(game) {
-  return `<section class="move-log"><h3>${t('log')}</h3>${game.history.length?`<ol>${game.history.slice(-5).reverse().map(a=>`<li>${a.type==='move'?badge(a.color):icon('close')}<span>${escape(playerName(a.player))}<small>${a.type==='move'?`${a.move.piece} / ${String.fromCharCode(65+a.move.x)}${a.move.y+1}${a.automatic?` / ${t('auto')}`:''}`:t('resigned')}</small></span></li>`).join('')}</ol>`:`<p>${t('emptyLog')}</p>`}</section>`;
+  return `<section class="move-log"><h3>${t('log')}</h3>${game.history.length?`<ol>${game.history.slice(-5).reverse().map(a=>`<li>${a.type==='move'?badge(a.color):icon('close')}<span>${escape(playerName(a.player))}<small>${a.type==='move'?`${a.move.piece} / ${String.fromCharCode(65+a.move.x)}${a.move.y+1}${a.source==='bot'?' / 机器人':a.automatic?` / ${t('auto')}`:''}`:t('resigned')}</small></span></li>`).join('')}</ol>`:`<p>${t('emptyLog')}</p>`}</section>`;
 }
 function resultView(game) {
-  const winners=scores(game).filter(s=>s.winner);
-  return `<section class="result-banner"><div class="result-icon">${icon('trophy')}</div><div><p class="eyebrow">WELL PLAYED</p><h2>${winners.map(s=>escape(playerName(s.player))).join(' & ')} ${t(winners.length>1?'tie':'win')}</h2><p>${t('finished')} / ${t(game.scoring)}</p></div>${ui.view!=='replay'?(ui.mode==='local'||ui.room.you===ui.room.host?`<button id="rematch" class="button primary"${busy()}>${t('rematch')}${icon('arrow')}</button>`:`<span>${t('waitHost')}</span>`):''}</section>`;
+  const winners=game.mode==='teams'?teamScores(game).filter(s=>s.winner):scores(game).filter(s=>s.winner);
+  const labels=winners.map(s=>game.mode==='teams'?`${s.team?'B':'A'}队（${s.members.map(i=>escape(playerName(i))).join('、')}）`:escape(playerName(s.player)));
+  return `<section class="result-banner"><div class="result-icon">${icon('trophy')}</div><div><p class="eyebrow">WELL PLAYED</p><h2>${labels.join(' & ')} ${t(winners.length>1?'tie':'win')}</h2><p>${t('finished')} / ${t(game.scoring)}</p></div>${ui.view!=='replay'?(ui.mode==='local'||ui.room.you===ui.room.host?`<button id="rematch" class="button primary"${busy()}>${t('rematch')}${icon('arrow')}</button>`:`<span>${t('waitHost')}</span>`):''}</section>`;
 }
+function teamCards(game) {return game.mode==='teams'?`<div class="team-cards">${teamScores(game).map(s=>`<article><strong>${s.team?'B':'A'}队 · ${s.members.map(i=>escape(playerName(i))).join(' + ')}</strong><span>${s.score}分 / 剩${s.remaining}格</span></article>`).join('')}</div>`:'';}
 function mobileDock(game) {
   if(ui.view!=='game'||game.status!=='playing') return '';
   const allowed=canPlay();
@@ -101,14 +121,16 @@ function mobileDock(game) {
 }
 function gameView() {
   const game=ui.game,playing=game.status==='playing',color=game.turn;
-  return `<main class="game-shell"><div class="game-top"><div><span class="eyebrow">${ui.view==='replay'?'REPLAY':ui.mode==='local'?'LOCAL TABLE':'ONLINE TABLE'}</span><h1>${t(ui.view==='replay'?'replay':ui.mode)} <small>${game.players} ${t('people')}${ui.mode==='online'&&ui.room?` / ${ui.room.code}`:''}</small></h1></div><div class="game-top-actions">${ui.mode==='online'?connectionLabel():`<span class="saved-label">${t('saved')}</span>`}<button id="export-replay" class="button secondary small">${icon('export')}${t('export')}</button></div></div>${playerCards(game)}${!playing?resultView(game):''}
+  return `<main class="game-shell"><div class="game-top"><div><span class="eyebrow">${ui.view==='replay'?'REPLAY':ui.mode==='local'?'LOCAL TABLE':'ONLINE TABLE'}</span><h1>${t(ui.view==='replay'?'replay':ui.mode)} <small>${game.players} ${t('people')} / ${modeLabel(game)}${ui.mode==='online'&&ui.room?` / ${ui.room.code}`:''}</small></h1></div><div class="game-top-actions">${ui.mode==='online'?connectionLabel():`<span class="saved-label">${t('saved')}</span>`}<button id="export-replay" class="button secondary small">${icon('export')}${t('export')}</button></div></div>${teamCards(game)}${playerCards(game)}${!playing?resultView(game):''}
   ${game.players===3?`<div class="neutral-bar">${badge(3)}<strong>${t('neutral')}</strong><span>${t('neutralHelp')}</span><b>${t('player')} ${controller(game,3)+1}</b></div>`:''}
-  <div class="game-layout"><section class="board-section"><div class="turn-banner"><div>${badge(color)}<span>${playing?`${t('turn')} / <strong>${escape(playerName(controller(game)))}</strong> ${game.players===3&&color===3?` / ${t('neutral')}`:''}`:t('finished')}</span></div>${ui.mode==='online'&&playing?'<span id="countdown" class="countdown"></span>':`<span class="turn-note">${ui.view==='replay'?t('replay'):t(ui.mode==='local'?'local':canPlay()?'yourTurn':'otherTurn')}</span>`}</div><div class="board-frame">${boardSVG(game)}</div><div class="board-meta"><span><strong id="move-number">${game.history.filter(a=>a.type==='move').length}</strong> ${t('moves')}</span><button id="show-corners" class="text-button" aria-pressed="${ui.showCorners}">${icon('hint')}${t('corners')}</button></div></section>${controls(game)}</div>${mobileDock(game)}</main>`;
+  <div class="game-layout"><section class="board-section"><div class="turn-banner"><div>${badge(color)}<span>${playing?`${t('turn')} / <strong>${escape(playerName(controller(game)))}</strong>${game.seats[controller(game)].kind==='bot'?' · 机器人思考中':''} ${game.players===3&&color===3?` / ${t('neutral')}`:''}`:t('finished')}</span></div>${ui.mode==='online'&&playing?'<span id="countdown" class="countdown"></span>':`<span class="turn-note">${ui.view==='replay'?t('replay'):t(ui.mode==='local'?'local':canPlay()?'yourTurn':'otherTurn')}</span>`}</div><div class="board-frame">${boardSVG(game)}</div><div class="board-meta"><span><strong id="move-number">${game.history.filter(a=>a.type==='move').length}</strong> ${t('moves')}</span><button id="show-corners" class="text-button" aria-pressed="${ui.showCorners}">${icon('hint')}${t('corners')}</button></div></section>${controls(game)}</div>${mobileDock(game)}</main>`;
 }
 function render() {
+  if(drag) return;
   $('#app').innerHTML=header()+(ui.view==='home'?homeView():ui.view==='lobby'?lobbyView():gameView());
   if(ui.game&&ui.view!=='home'&&ui.view!=='lobby') {updatePreview();drawFrontiers();}
   updateCountdown();
+  scheduleLocalBot();
 }
 function updateCountdown() {
   const node=$('#countdown');if(!node||!ui.room?.deadline) return;
@@ -120,10 +142,11 @@ function updatePreview() {
   const group=$('#preview'),message=$('#preview-status'),confirm=$('#confirm-move');if(!group) return;
   const move=currentMove(),result=move?validateMove(ui.game,move):null;
   const cells=move?transform(move.piece,move.orientation).map(([x,y])=>[x+move.x,y+move.y]):[];
-  group.innerHTML=cells.filter(([x,y])=>x>=0&&x<20&&y>=0&&y<20).map(([x,y])=>`<rect class="ghost c${ui.game.turn} ${result?.ok?'valid':'invalid'}" x="${x*30+1.5}" y="${y*30+1.5}" width="27" height="27" rx="3.6"/>`).join('');
-  if(message) {message.textContent=!ui.selected?t('chooseHelp'):!move?t('selectPosition'):`${t(result.ok?'legal':result.code)} (${move.x+1}, ${move.y+1})`;message.className=result?.ok?'valid-message':'';}
+  group.innerHTML=cells.map(([x,y])=>`<rect class="ghost c${ui.game.turn} ${result?.ok?'valid':'invalid'}" x="${x*30+1.5}" y="${y*30+1.5}" width="27" height="27" rx="3.6"/>`).join('');
+  if(message) {message.textContent=!ui.selected?t('chooseHelp'):!move?t('selectPosition'):`${t(result.ok?'legal':result.code)} (${move.x+1}, ${move.y+1})${hintLabel?' / '+hintLabel:''}`;message.className=result?.ok?'valid-message':'';}
   if(confirm) confirm.disabled=!canPlay()||!result?.ok;
   const dock=$('[data-action="confirm-move"]');if(dock) dock.disabled=!canPlay()||!result?.ok;
+  syncTray();
 }
 function drawFrontiers() {
   const node=$('#frontiers');if(!node) return;node.innerHTML='';
@@ -139,9 +162,19 @@ function drawFrontiers() {
 }
 function saveLocal() {if(ui.mode==='local'&&ui.view==='game') {if(!write(LOCAL,exportReplay(ui.game,ui.names))) toast(t('storageError'));}}
 function beginLocal(record=null) {
-  ui.mode='local';ui.room=null;ui.replayRecord=null;ui.game=record?replay(record):newGame(ui.count,ui.scoring);
-  ui.names=Array.from({length:ui.game.players},(_,i)=>String(record?.names?.[i]??`${t('player')} ${i+1}`).slice(0,20));
+  ui.mode='local';ui.room=null;ui.replayRecord=null;ui.game=record?replay(record):newGame(ui.count,ui.scoring,{mode:selectedMode(),seats:ui.seatKinds.slice(0,ui.count).map(kind=>kind==='bot'?{kind,level:'standard'}:{kind})});
+  ui.names=Array.from({length:ui.game.players},(_,i)=>String(record?.names?.[i]??`${ui.game.seats[i].kind==='bot'?'机器人':t('player')} ${i+1}`).slice(0,20));
   ui.view='game';resetSelection();saveLocal();render();window.scrollTo(0,0);
+}
+function scheduleLocalBot() {
+  if(ui.mode!=='local'||ui.view!=='game'||ui.game?.status!=='playing'||ui.game.seats[controller(ui.game)].kind!=='bot') return;
+  const key=`${botGeneration}:${ui.game.revision}`;if(botKey===key) return;botKey=key;
+  const game=ui.game,generation=botGeneration,revision=game.revision;
+  botAnalysis.analyze({kind:'bot',context:key,game}).then(result=>{
+    if(generation!==botGeneration||ui.game!==game||ui.view!=='game'||ui.mode!=='local'||game.revision!==revision) return;
+    const move=result?.move&&validateMove(game,result.move).ok?result.move:findMove(game);
+    if(!move) return;applyMove(game,move,{source:'bot'});resetSelection();saveLocal();render();
+  });
 }
 let lastGameKey='';
 const network=new RoomClient({
@@ -189,7 +222,11 @@ async function handleButton(button) {
     return;
   }
   if(button.dataset.count) {captureOptions();ui.count=Number(button.dataset.count);render();return;}
-  if(button.dataset.piece) {if(!canPlay()) return;ui.selected=button.dataset.piece;ui.orientation=0;ui.cursor=null;render();if(matchMedia('(max-width:760px)').matches) $('#board').scrollIntoView({block:'center'});return;}
+  if(button.dataset.addBot!==undefined||button.dataset.removeBot!==undefined) {
+    const adding=button.dataset.addBot!==undefined;ui.pending=true;render();
+    try {await network.command({type:adding?'set-bot':'remove-bot',seat:Number(adding?button.dataset.addBot:button.dataset.removeBot),...(adding?{level:'standard'}:{})});} finally {ui.pending=false;render();}return;
+  }
+  if(button.dataset.piece) {if(!canPlay()) return;manualPreview();setPreview(initialPreview(ui.game,button.dataset.piece,currentMove()));render();if(matchMedia('(max-width:760px)').matches) $('#board').scrollIntoView({block:'center'});return;}
   if(id==='theme-toggle') {captureOptions();ui.theme=ui.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=ui.theme;write('djq-theme',ui.theme);render();}
   else if(id==='rules-button') showRules();
   else if(id==='home-button'||id==='leave-room') {captureOptions();await goHome();}
@@ -197,12 +234,12 @@ async function handleButton(button) {
   else if(id==='resume-local') {try{beginLocal(read(LOCAL));}catch{write(LOCAL,null);throw Error('INVALID_REPLAY');}}
   else if(id==='create-room'||id==='join-room') {
     captureOptions();write('djq-name',ui.name);ui.pending=true;ui.mode='online';render();
-    try {if(id==='create-room') await network.create({name:ui.name,players:ui.count,scoring:ui.scoring,turnSeconds:ui.seconds});
+    try {if(id==='create-room') await network.create({name:ui.name,players:ui.count,mode:selectedMode(),scoring:ui.scoring,turnSeconds:ui.seconds});
       else await network.join(ui.joinCode.trim().toUpperCase(),ui.name);
     } finally {ui.pending=false;render();}
   }
-  else if(id==='ready'||id==='online-start') {
-    ui.pending=true;render();try{await network.command(id==='ready'?{type:'ready',ready:!ui.room.players[ui.room.you].ready}:{type:'start'});}finally{ui.pending=false;render();}
+  else if(id==='online-start') {
+    ui.pending=true;render();try{await network.command({type:'start'});}finally{ui.pending=false;render();}
   }
   else if(id==='copy-invite') {
     const link=`${location.origin}/?room=${ui.room.code}`;
@@ -211,20 +248,38 @@ async function handleButton(button) {
   }
   else if(id==='rotate'||id==='flip') {
     if(!canPlay()||!ui.selected) return;
-    ui.orientation=id==='rotate'?(ui.orientation>=4?4:0)+(ui.orientation%4+1)%4:(ui.orientation<4?4:0)+(4-ui.orientation%4)%4;render();
+    manualPreview();
+    setPreview(id==='rotate'?rotatePreview(currentMove()):flipPreview(currentMove()));render();
   }
-  else if(id==='hint') {if(!canPlay()) return;const move=findMove(ui.game);if(!move){toast(t('noHint'));return;}ui.selected=move.piece;ui.orientation=move.orientation;ui.cursor={x:move.x,y:move.y};render();}
+  else if(id==='hint') {
+    if(!canPlay()||hintPending) return;
+    if(!hintMoves) {
+      hintPending=true;const generation=analysisGeneration;
+      const result=await analysis.analyze({context:generation,kind:'hints',game:ui.game});
+      if(generation!==analysisGeneration) return;
+      hintPending=false;if(!result) {toast(t('analysisFailed'));return;}hintMoves=result.moves;
+    }
+    if(!hintMoves.length) {toast(t('noHint'));return;}
+    const move=hintMoves[hintIndex];hintLabel=hintMoves.length===1?'仅此1个可行方案':`方案 ${hintIndex+1}/${hintMoves.length}`;
+    hintLabel+=` / ${pieceSize(move.piece)}格${move.orientation%4?' / 已旋转':''}${move.orientation>=4?' / 已翻转':''}`;
+    hintIndex=(hintIndex+1)%hintMoves.length;setPreview(move);render();
+  }
   else if(id==='clear-selection') {resetSelection();render();}
   else if(id==='confirm-move') await commitMove();
   else if(id==='dock-pieces') $('.piece-tray').scrollIntoView({block:'center'});
   else if(id==='show-corners') {ui.showCorners=!ui.showCorners;button.setAttribute('aria-pressed',String(ui.showCorners));drawFrontiers();}
-  else if(id==='undo'&&ui.mode==='local'&&ui.game.history.length) {const record=exportReplay(ui.game,ui.names);record.actions.pop();ui.game=replay(record);resetSelection();saveLocal();render();}
+  else if(id==='undo'&&ui.mode==='local'&&ui.game.history.length) {
+    const record=exportReplay(ui.game,ui.names);let end=record.actions.length-1;
+    if(ui.game.seats.some(s=>s.kind==='bot')) {while(end>=0&&ui.game.seats[record.actions[end].player].kind==='bot') end--;}
+    if(end<0) return;record.actions=record.actions.slice(0,end);ui.game=replay(record);resetSelection();saveLocal();render();
+  }
   else if(id==='resign'&&confirm(t('resignConfirm'))) {
+    if(ui.mode==='local'&&!canPlay()) return;
     if(ui.mode==='local') {resign(ui.game,controller(ui.game));resetSelection();saveLocal();render();}
     else {ui.pending=true;render();try{await network.command({type:'resign',round:ui.room.round,revision:ui.game.revision});}finally{ui.pending=false;render();}}
   }
   else if(id==='rematch') {
-    if(ui.mode==='local') {ui.count=ui.game.players;ui.scoring=ui.game.scoring;beginLocal();}
+    if(ui.mode==='local') {ui.count=ui.game.players;ui.variant=ui.game.mode==='teams'?'teams':'classic';ui.seatKinds=ui.game.seats.map(s=>s.kind);ui.scoring=ui.game.scoring;beginLocal();}
     else {ui.pending=true;render();try{await network.command({type:'rematch'});}finally{ui.pending=false;render();}}
   }
   else if(id==='export-replay') exportFile();
@@ -233,38 +288,48 @@ async function handleButton(button) {
 }
 let suppressClickUntil=0,drag=null;
 $('#app').addEventListener('click',event=>{
-  if(Date.now()<suppressClickUntil) return;
+  if(Date.now()<suppressClickUntil&&event.target.closest('#board,[data-piece]')) return;
   const button=event.target.closest('button');if(button&&!button.disabled) handleButton(button).catch(error=>toast(t(error.message)));
 });
 $('#modal').addEventListener('click',event=>{if(event.target.closest('#close-modal')||event.target===$('#modal')) $('#modal').close();});
 $('#app').addEventListener('change',event=>{
-  if(event.target.id==='replay-range') setReplayStep(Number(event.target.value));else captureOptions();
+  if(event.target.id==='replay-range') setReplayStep(Number(event.target.value));else {captureOptions();if(event.target.id==='game-mode') render();}
 });
 $('#app').addEventListener('input',event=>{
   if(event.target.id==='room-code-input') event.target.value=event.target.value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);
   if(event.target.id==='replay-range') $('#replay-label').textContent=`${event.target.value} / ${ui.replayRecord.actions.length}`;
 });
-function setCursorFromPointer(event) {
-  const board=$('#board');if(!board||!canPlay()||!ui.selected) return false;
-  const r=board.getBoundingClientRect();if(event.clientX<r.left||event.clientX>=r.right||event.clientY<r.top||event.clientY>=r.bottom) return false;
-  ui.cursor={x:Math.floor((event.clientX-r.left)/r.width*20),y:Math.floor((event.clientY-r.top)/r.height*20)};updatePreview();return true;
+function pointerPoint(event) {
+  const r=$('#board').getBoundingClientRect();
+  return {clientX:event.clientX,clientY:event.clientY,x:(event.clientX-r.left)/r.width*20,y:(event.clientY-r.top)/r.height*20};
 }
 $('#app').addEventListener('pointerdown',event=>{
-  const piece=event.target.closest('[data-piece]');
-  if(piece&&!piece.disabled&&event.pointerType==='mouse') drag={id:piece.dataset.piece,startX:event.clientX,startY:event.clientY,moving:false};
-  if(event.target.closest('#board')) {setCursorFromPointer(event);$('#board')?.focus({preventScroll:true});}
+  if(drag||!canPlay()||event.button!==0||!event.isPrimary) return;
+  const board=event.target.closest('#board');
+  if(!board||!hitPreview(currentMove(),pointerPoint(event))) return;
+  event.preventDefault();board.focus({preventScroll:true});
+  manualPreview();
+  drag=beginGesture({pointerId:event.pointerId,startPoint:pointerPoint(event),move:currentMove()});
+  board.setPointerCapture(event.pointerId);
 });
 document.addEventListener('pointermove',event=>{
-  if(drag&&Math.hypot(event.clientX-drag.startX,event.clientY-drag.startY)>8&&canPlay()) {
-    if(!drag.moving) {drag.moving=true;ui.selected=drag.id;ui.orientation=0;render();}
-    setCursorFromPointer(event);
-  } else if(event.target.closest?.('#board')&&event.pointerType==='mouse') setCursorFromPointer(event);
+  if(!drag||event.pointerId!==drag.pointerId||!canPlay()) return;
+  drag=moveGesture(drag,pointerPoint(event));setPreview(drag.move);updatePreview();
 });
-document.addEventListener('pointerup',event=>{if(drag?.moving){setCursorFromPointer(event);suppressClickUntil=Date.now()+350;}drag=null;});
-document.addEventListener('pointercancel',()=>drag=null);
+function finishGesture(event,cancelled=false) {
+  if(!drag||(event&&event.pointerId!==drag.pointerId)) return;
+  const gesture=drag,result=endGesture(gesture,{cancelled});drag=null;
+  setPreview(result.rotate?rotatePreview(result.move,gesture.pivot):result.move);
+  suppressClickUntil=Date.now()+350;render();
+}
+document.addEventListener('pointerup',event=>finishGesture(event));
+document.addEventListener('pointercancel',event=>finishGesture(event,true));
+document.addEventListener('lostpointercapture',event=>finishGesture(event,true));
+window.addEventListener('blur',()=>finishGesture(null,true));
 document.addEventListener('keydown',event=>{
   if($('#modal').open||event.ctrlKey||event.metaKey||event.altKey||event.target.closest('input,select,textarea,[contenteditable="true"]')) return;
   if(!canPlay()) return;
+  if(drag) {if(event.key==='Escape') finishGesture(null,true);return;}
   if(event.key==='Enter'&&event.target.closest('button,a')) return;
   const key=event.key.toLowerCase();
   if(['r','f','enter','escape','arrowup','arrowdown','arrowleft','arrowright'].includes(key)) event.preventDefault();
@@ -272,9 +337,10 @@ document.addEventListener('keydown',event=>{
   else if(key==='enter') commitMove().catch(error=>toast(t(error.message)));
   else if(key==='escape') {resetSelection();render();}
   else if(key.startsWith('arrow')&&ui.selected) {
+    manualPreview();
     ui.cursor??={x:CORNERS[ui.game.turn][0],y:CORNERS[ui.game.turn][1]};
     if(key==='arrowleft') ui.cursor.x--;if(key==='arrowright') ui.cursor.x++;if(key==='arrowup') ui.cursor.y--;if(key==='arrowdown') ui.cursor.y++;
-    ui.cursor.x=Math.max(0,Math.min(19,ui.cursor.x));ui.cursor.y=Math.max(0,Math.min(19,ui.cursor.y));updatePreview();
+    ui.cursor=clampOrigin(ui.selected,ui.orientation,ui.cursor);updatePreview();
   }
 });
 function setReplayStep(step) {ui.replayStep=Math.max(0,Math.min(ui.replayRecord.actions.length,step));ui.game=replay(ui.replayRecord,ui.replayStep);resetSelection();render();}
@@ -285,8 +351,8 @@ $('#import-file').addEventListener('change',async event=>{
     ui.mode='local';ui.room=null;ui.view='replay';setReplayStep(0);window.scrollTo(0,0);
   } catch {toast(t('INVALID_REPLAY'));}
 });
-window.addEventListener('pagehide',()=>network.stop(false));
-window.addEventListener('pageshow',event=>{const session=event.persisted?savedSession():null;if(session) resumeOnline(session,true).catch(error=>toast(t(error.message)));});
+window.addEventListener('pagehide',()=>{network.stop(false);analysis.cancel();botAnalysis.cancel();botGeneration++;botKey=null;});
+window.addEventListener('pageshow',event=>{const session=event.persisted?savedSession():null;if(session) resumeOnline(session,true).catch(error=>toast(t(error.message)));else if(event.persisted) scheduleLocalBot();});
 setInterval(updateCountdown,1000);
 render();
 const session=savedSession();

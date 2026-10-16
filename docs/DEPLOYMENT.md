@@ -70,7 +70,9 @@ Static assets are served with no-cache (revalidation), and API responses with no
 
 ## Acceptance on your actual hostname
 
-Check /api/health, create a room, join from a second browser/device, ready both, make a move, refresh one tab and confirm recovery, then close that tab and use the home page's recovery button in a new tab in the same browser profile. Verify a new tab does not automatically take over an existing seat. Recover before the server reclaims the disconnected seat/room. Wait for a timed move, resign, and start a rematch. Repeat a three-player room to verify neutral green. Inspect the event stream for active updates through the proxy and check that tokens do not appear in proxy URLs/logs. If using a CDN, repeat with it enabled.
+Check /api/health, create a room, join from a second browser/device, start directly when full and online, make a move, refresh one tab and confirm recovery, then close that tab and use the home page's recovery button in a new tab in the same browser profile. Verify a new tab does not automatically take over an existing seat. Recover before the server reclaims the disconnected seat/room. Wait for a timed move, resign, and start a rematch. Repeat a three-player room to verify neutral green, then a four-seat team room with empty seats filled by bots. Inspect the event stream for active updates through the proxy and check that tokens do not appear in proxy URLs/logs. Verify module Web Workers can load through your CSP/CDN. If using a CDN, repeat with it enabled.
+
+The authoritative server remains one Node process; its two bot worker_threads perform computation only, not independent room stores. Publish public and shared modules together with the server. Old clients still send ready commands, so refresh cached clients when upgrading to v1.1; no rolling-protocol compatibility is promised for live rooms, which are cleared on restart.
 
 ## Boundaries
 
