@@ -1,46 +1,46 @@
 {
-  "date": "2026-10-16",
+  "date": "2026-10-17",
   "feature": "Match UI 2.0",
   "baseCommit": "fb73d1b8275fdd563010fce3ed4a3fd613ed2855",
   "branch": "feat/game-ui-v2-landscape",
   "native": {
     "command": "npm run verify",
-    "passed": 68,
+    "passed": 69,
     "failed": 0,
-    "modules": 32,
+    "modules": 33,
     "build": true
   },
   "browser": {
     "command": "npm run test:browser",
-    "passed": 29,
+    "passed": 30,
     "failed": 0,
     "engine": "Installed Edge/Chromium headless",
     "mode": "Actual loopback HTTP/SSE, native storage, CSP, module workers and CDP touch",
-    "log": "artifacts/ui-v2-browser-final.log"
+    "log": "artifacts/ui-v2-refinement-browser.log"
   },
   "viewports": [
     {
       "width": 1920,
       "height": 1080,
-      "board": 869,
+      "board": 938,
       "threeColumns": true
     },
     {
       "width": 1600,
       "height": 900,
-      "board": 689,
+      "board": 758,
       "threeColumns": true
     },
     {
       "width": 1366,
       "height": 768,
-      "board": 557,
+      "board": 626,
       "threeColumns": true
     },
     {
       "width": 1280,
       "height": 800,
-      "board": 589,
+      "board": 610,
       "threeColumns": true
     },
     {
@@ -86,7 +86,11 @@
     "keyboard focus, Esc and modal drawer focus wrap",
     "orientation changes and inert restoration",
     "readonly replay and keyboard range navigation",
-    "full local bot game, online bots/teams, undo/rematch and persistent recovery"
+    "full local bot game, online bots/teams, undo/rematch and persistent recovery",
+    "minimal board captions and letter-free color markers",
+    "current-color perimeter breathing, no internal seams, removed on commit",
+    "static glow for reduced-motion preferences",
+    "single-column transform buttons and header countdown"
   ],
   "unchanged": [
     "shared rules/strategy",

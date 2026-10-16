@@ -4,7 +4,7 @@ import { RoomClient, savedSession, savedSessions } from '/network.mjs';
 import { t } from '/i18n.mjs';
 import { clampOrigin, hitPreview, rotatePreview, flipPreview, initialPreview, beginGesture, moveGesture, endGesture } from '/placement.mjs';
 import { AnalysisClient } from '/analysis-client.mjs';
-import { pieceSVG, selectionMarkup, fitGameBoard } from '/game-ui.mjs';
+import { pieceSVG, selectionMarkup, fitGameBoard, previewOutline } from '/game-ui.mjs';
 
 const $=selector=>document.querySelector(selector);
 const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -36,7 +36,7 @@ const icons={
  close:'<path d="m6 6 12 12M6 18 18 6"/>'
 };
 const icon=name=>`<svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]??icons.arrow}</svg>`;
-const badge=c=>`<span class="color-mark c${c}">${'BYRG'[c]}</span>`;
+const badge=c=>`<span class="color-mark c${c}" role="img" aria-label="${t(COLORS[c])}${t('colorSuffix')}"></span>`;
 const playerName=i=>ui.names[i]??`${t('player')} ${i+1}`;
 const busy=()=>ui.pending?' disabled':'';
 let toastTimer;
@@ -63,7 +63,7 @@ function captureOptions() {
 function header() {
   const match=(ui.view==='game'||ui.view==='replay')&&ui.game;
   return `<header class="site-header ${match?'match-header':''}"><button id="home-button" class="brand" aria-label="${t('home')}"><span class="brand-mark"><i></i><i></i><i></i><i></i></span><strong>${t('title')}</strong><span class="brand-label">DJQ</span></button>
-  ${match?`<div class="match-context"><strong>${t(ui.view==='replay'?'replay':ui.mode)}</strong><span>${ui.game.players} ${t('people')} / ${modeLabel(ui.game)} / ${t(ui.game.scoring)}${ui.mode==='online'&&ui.room?` / ${ui.room.code}`:''}</span></div>`:''}
+  ${match?`<div class="match-context"><strong>${t(ui.view==='replay'?'replay':ui.mode)}</strong><span>${ui.game.players} ${t('people')} / ${modeLabel(ui.game)} / ${t(ui.game.scoring)}${ui.mode==='online'&&ui.room?` / ${ui.room.code}`:''}</span>${ui.view==='game'&&ui.mode==='online'&&ui.game.status==='playing'?'<span id="countdown" class="countdown" aria-label="回合剩余时间"></span>':''}</div>`:''}
   <nav aria-label="${t('gameNavigation')}"><button id="rules-button" class="text-button">${icon('help')}<span>${t('rules')}</span></button>${match?`<button id="leave-room" class="text-button">${icon('back')}<span>${t('home')}</span></button>`:`<a class="github-link" href="https://github.com/duanap/Mosaic" target="_blank" rel="noopener noreferrer">GitHub ${icon('arrow')}</a>`}<button id="theme-toggle" class="icon-button" aria-label="${t('theme')}">${icon(ui.theme==='dark'?'sun':'moon')}</button></nav></header>`;
 }
 const miniPiece=pieceSVG;
@@ -71,7 +71,7 @@ function boardSVG(game,interactive=true) {
   const tiles=game.board.map((c,index)=>c<0?'':`<rect class="tile c${c}" x="${index%20*30+1.5}" y="${Math.floor(index/20)*30+1.5}" width="27" height="27" rx="3.6"/>`).join('');
   const last=game.history.findLast(a=>a.type==='move');
   const highlight=last?transform(last.move.piece,last.move.orientation).map(([x,y])=>`<rect class="last-tile" x="${(x+last.move.x)*30+4}" y="${(y+last.move.y)*30+4}" width="22" height="22" rx="2"/>`).join(''):'';
-  const marks=CORNERS.map(([x,y],c)=>game.started[c]?'':`<g class="start-mark c${c}"><circle cx="${x*30+15}" cy="${y*30+15}" r="11"/><text x="${x*30+15}" y="${y*30+19.5}" text-anchor="middle">${'BYRG'[c]}</text></g>`).join('');
+  const marks=CORNERS.map(([x,y],c)=>game.started[c]?'':`<g class="start-mark c${c}"><circle cx="${x*30+15}" cy="${y*30+15}" r="11"/></g>`).join('');
   const grid=Array.from({length:21},(_,i)=>`M${i*30} 0V600M0 ${i*30}H600`).join('');
   return `<svg ${interactive?`id="board" tabindex="0" role="application" aria-label="20 x 20 ${t('title')}. ${t('shortcut')}"`:'aria-hidden="true"'} class="board-svg" viewBox="0 0 600 600"><rect class="board-base" width="600" height="600"/><path class="grid-lines" d="${grid}"/>${tiles}${marks}${highlight}${interactive?'<g id="frontiers"></g><g id="preview" pointer-events="none"></g>':''}</svg>`;
 }
@@ -101,7 +101,7 @@ function playerCards(game) {
     const ended=s.colors.every(c=>game.stopped[c]);
     const offline=ui.mode==='online'&&!bot&&!ui.room?.players[s.player]?.connected;
     const state=s.resigned?t('resigned'):game.status==='finished'?(s.winner?t('win'):t('finished')):active?t(bot?'thinking':'currentTurn')+(offline?` · ${t('offline')}`:''):offline?t('offline'):ended?(game.players===3&&!game.stopped[3]?t('neutralRotation'):t('colorEnded')):t('waitingTurn');
-    return `<article class="player-card c${color} ${active?'active':''} ${s.resigned?'forfeited':''}" data-player="${s.player}" ${active?'aria-current="true"':''}><div class="player-ident"><span class="player-avatar">${s.player+1}</span><div><strong>${escape(playerName(s.player))}</strong><small class="player-type">${t(bot?'robot':'human')}${game.mode==='teams'?` / ${s.player%2?'B':'A'}${t('team')}`:''}${ui.mode==='online'&&ui.room?.you===s.player?` / ${t('you')}`:''}</small><div class="player-colors">${s.colors.map(c=>`<span>${badge(c)}${t(COLORS[c])}${t('colorSuffix')}</span>`).join('')}</div></div></div><div class="player-score"><strong>${s.score>0?'+':''}${s.score}</strong><span>${s.remaining} ${t('squares')}${t('remaining')}</span></div><span class="player-state ${active?'is-current':''}">${state}</span></article>`;
+    return `<article class="player-card c${color} ${active?'active':''} ${s.resigned?'forfeited':''}" data-player="${s.player}" ${active?'aria-current="true"':''}><div class="player-ident"><span class="player-avatar">${s.player+1}</span><div><strong>${escape(playerName(s.player))}</strong>${game.mode==='teams'||ui.mode==='online'&&ui.room?.you===s.player?`<small class="player-affiliation">${[game.mode==='teams'?`${s.player%2?'B':'A'}${t('team')}`:null,ui.mode==='online'&&ui.room?.you===s.player?t('you'):null].filter(Boolean).join(' · ')}</small>`:''}<div class="player-colors">${s.colors.map(c=>`<span>${badge(c)}${t(COLORS[c])}${t('colorSuffix')}</span>`).join('')}</div></div></div><div class="player-score"><strong>${s.score>0?'+':''}${s.score}</strong></div><span class="player-state ${active?'is-current':''}">${state}</span></article>`;
   }).join('')}</div>`;
 }
 function controls(game) {
@@ -110,7 +110,7 @@ function controls(game) {
   const close=`<button id="close-pieces" class="icon-button close-pieces" aria-label="${t('closePieces')}">${icon('close')}</button>`;
   const auxiliary=`<div class="auxiliary-actions"><button id="show-corners" class="text-button" aria-pressed="${ui.showCorners}">${icon('hint')}${t('corners')}</button><button id="export-replay" class="text-button">${icon('export')}${t('export')}</button>${!replaying&&ui.mode==='local'?`<button id="undo" class="text-button" ${!game.history.length?'disabled':''}>${icon('back')}${t('undo')}</button>`:''}${!replaying&&game.status==='playing'?`<button id="resign" class="text-button danger" ${ui.pending||ui.mode==='local'&&!canPlay()||ui.mode==='online'&&(!ui.connected||game.resigned[ui.room.you])?'disabled':''}>${t('resign')}</button>`:''}</div>`;
   if(replaying) return `<aside id="game-controls" class="control-panel panel replay-panel" ${modal?'role="dialog" aria-modal="true"':''} aria-labelledby="controls-title">${close}<div class="control-scroll"><p class="eyebrow">REPLAY / READ ONLY</p><h2 id="controls-title">${t('replay')}</h2><p class="replay-help">${t('replayHelp')}</p><div class="replay-progress"><strong id="replay-label">${ui.replayStep} / ${ui.replayRecord.actions.length}</strong><input id="replay-range" aria-label="${t('replay')}" type="range" min="0" max="${ui.replayRecord.actions.length}" value="${ui.replayStep}"></div>${auxiliary}${moveLog(game)}</div><div class="replay-buttons"><button id="replay-prev" class="button secondary" ${ui.replayStep===0?'disabled':''}>${icon('back')}${t('prev')}</button><button id="replay-next" class="button primary" ${ui.replayStep===ui.replayRecord.actions.length?'disabled':''}>${t('next')}${icon('arrow')}</button></div></aside>`;
-  return `<aside id="game-controls" class="control-panel panel" ${modal?'role="dialog" aria-modal="true"':''} aria-labelledby="controls-title">${close}<div class="control-scroll"><div class="control-heading"><div><h2 id="controls-title">${t('choosePiece')}</h2><span>${t('shapeInventory')}</span></div><span class="remaining-pill c${active}">${remaining.length}<small> / 21</small></span></div><div class="tray-legend"><span class="c${active}"><i></i>${t('available')}</span><span><i></i>${t('used')}</span></div>
+  return `<aside id="game-controls" class="control-panel panel" ${modal?'role="dialog" aria-modal="true"':''} aria-labelledby="controls-title">${close}<div class="control-scroll"><div class="control-heading"><div><h2 id="controls-title">${t('choosePiece')}</h2></div><span class="remaining-pill c${active}">${remaining.length}<small> / 21</small></span></div><div class="tray-legend"><span class="c${active}"><i></i>${t('available')}</span><span><i></i>${t('used')}</span></div>
   <div class="piece-tray c${active}" aria-label="${t('choosePiece')}">${PIECES.slice().reverse().map(p=>`<button class="piece ${ui.selected===p.id?'selected':''} ${remaining.includes(p.id)?'':'used'}" data-piece="${p.id}" aria-label="${p.id} / ${p.cells.length} ${t('squares')}" aria-pressed="${ui.selected===p.id}" ${!allowed||!remaining.includes(p.id)?'disabled':''}>${miniPiece(p.id,ui.selected===p.id?ui.orientation:0)}<span>${p.id}</span></button>`).join('')}</div>
   <section class="selection-tools" aria-labelledby="selection-title"><h3 id="selection-title">${t('currentPiece')}</h3><div id="selected-piece" class="selected-piece">${selectionMarkup(ui.selected,ui.orientation,active,t)}</div><div class="transform-tools"><button id="rotate" class="tool-button" ${!allowed||!ui.selected?'disabled':''}>${icon('rotate')}${t('rotate')}<kbd>R</kbd></button><button id="flip" class="tool-button" ${!allowed||!ui.selected?'disabled':''}>${icon('flip')}${t('flip')}<kbd>F</kbd></button><p class="keyboard-help">${t('shortcut')}</p></div></section>
   ${auxiliary}<details id="game-history" class="game-history" ${ui.historyOpen?'open':''}><summary>${t('log')}<span>${game.history.length}</span></summary>${moveLog(game)}</details></div>
@@ -124,7 +124,7 @@ function resultView(game) {
   const labels=winners.map(s=>game.mode==='teams'?`${s.team?'B':'A'}队（${s.members.map(i=>escape(playerName(i))).join('、')}）`:escape(playerName(s.player)));
   return `<section class="result-banner"><div class="result-icon">${icon('trophy')}</div><div><p class="eyebrow">WELL PLAYED</p><h2>${labels.join(' & ')} ${t(winners.length>1?'tie':'win')}</h2><p>${t('finished')} / ${t(game.scoring)}</p></div>${ui.view!=='replay'?(ui.mode==='local'||ui.room.you===ui.room.host?`<button id="rematch" class="button primary"${busy()}>${t('rematch')}${icon('arrow')}</button>`:`<span>${t('waitHost')}</span>`):''}</section>`;
 }
-function teamCards(game) {return game.mode==='teams'?`<div class="team-cards">${teamScores(game).map(s=>`<article><strong>${s.team?'B':'A'}队 · ${s.members.map(i=>escape(playerName(i))).join(' + ')}</strong><span>${s.score}分 / 剩${s.remaining}格</span></article>`).join('')}</div>`:'';}
+function teamCards(game) {return game.mode==='teams'?`<div class="team-cards">${teamScores(game).map(s=>`<article><strong>${s.team?'B':'A'}队 · ${s.members.map(i=>escape(playerName(i))).join(' + ')}</strong><span>${s.score}分</span></article>`).join('')}</div>`:'';}
 function mobileDock(game) {
   if(ui.view==='replay') return `<div class="mobile-dock replay-dock"><button data-action="replay-prev" ${ui.replayStep===0?'disabled':''}>${icon('back')}${t('prev')}</button><button id="dock-pieces" aria-controls="game-controls" aria-expanded="${ui.piecesOpen}">${t('replay')} ${ui.replayStep}/${ui.replayRecord.actions.length}</button><button data-action="replay-next" ${ui.replayStep===ui.replayRecord.actions.length?'disabled':''}>${t('next')}${icon('arrow')}</button></div>`;
   if(game.status!=='playing') return `<div class="mobile-dock ended-dock"><button id="dock-pieces" aria-controls="game-controls" aria-expanded="${ui.piecesOpen}">${icon('export')}${t('gameActions')}</button></div>`;
@@ -132,11 +132,11 @@ function mobileDock(game) {
   return `<div class="mobile-dock"><div class="dock-status">${badge(game.turn)}<span>${ui.selected??t('choosePiece')}</span><small>${t(game.seats[controller(game)].kind==='bot'?'thinking':allowed?'yourTurn':'otherTurn')}</small></div><div class="dock-actions"><button data-action="rotate" ${!allowed||!ui.selected?'disabled':''}>${icon('rotate')}${t('rotate')}</button><button data-action="flip" ${!allowed||!ui.selected?'disabled':''}>${icon('flip')}${t('flip')}</button><button id="dock-pieces" aria-controls="game-controls" aria-expanded="${ui.piecesOpen}">${icon('users')}${t('choosePiece')}</button><button data-action="confirm-move" class="dock-confirm" disabled>${icon('check')}${t(ui.pending?'submitting':'confirm')}</button></div></div>`;
 }
 function gameView() {
-  const game=ui.game,playing=game.status==='playing',color=game.turn;
+  const game=ui.game,playing=game.status==='playing';
   return `<main class="game-shell game-shell-v2 ${ui.piecesOpen?'pieces-open':''}"><div class="game-layout"><aside class="players-panel" aria-labelledby="players-heading"><div class="players-heading"><h2 id="players-heading">${t('playersTitle')}</h2><span>${game.players} ${t('people')}</span></div>${playerCards(game)}${teamCards(game)}
   ${game.players===3?`<div class="neutral-bar">${badge(3)}<strong>${t('neutral')}</strong><span>${t('neutralHelp')}</span><b>${escape(playerName(controller(game,3)))}</b></div>`:''}<div class="table-status">${ui.mode==='online'?connectionLabel():`<span>${t('saved')}</span>`}<span>DJQ · UI 2.0</span></div></aside>
-  <section class="board-section" aria-label="${t('boardTitle')}"><div class="board-heading"><h2>20 × 20 <span>${t('boardTitle')}</span></h2><div class="turn-banner"><div>${badge(color)}<span>${playing?`<strong>${escape(playerName(controller(game)))}</strong>${game.seats[controller(game)].kind==='bot'?` · ${t('thinking')}`:''}`:t('finished')}</span></div>${ui.mode==='online'&&playing?'<span id="countdown" class="countdown"></span>':''}</div></div>${!playing?resultView(game):''}
-  <div class="board-frame">${boardSVG(game)}</div><div class="board-meta"><span><strong id="move-number">${game.history.filter(a=>a.type==='move').length}</strong> ${t('moves')}</span><span>${t(ui.view==='replay'?'replay':'boardGesture')}</span></div></section>${controls(game)}</div><button id="pieces-backdrop" class="pieces-backdrop" aria-label="${t('closePieces')}" tabindex="-1"></button>${mobileDock(game)}</main>`;
+  <section class="board-section" aria-label="${t('boardTitle')}">${!playing?resultView(game):''}
+  <div class="board-frame">${boardSVG(game)}</div><span id="move-number" class="visually-hidden">${game.history.filter(a=>a.type==='move').length}</span></section>${controls(game)}</div><button id="pieces-backdrop" class="pieces-backdrop" aria-label="${t('closePieces')}" tabindex="-1"></button>${mobileDock(game)}</main>`;
 }
 function render() {
   if(drag) return;
@@ -161,7 +161,7 @@ function updatePreview() {
   const group=$('#preview'),message=$('#preview-status'),confirm=$('#confirm-move');if(!group) return;
   const move=currentMove(),result=move?validateMove(ui.game,move):null;
   const cells=move?transform(move.piece,move.orientation).map(([x,y])=>[x+move.x,y+move.y]):[];
-  group.innerHTML=cells.map(([x,y])=>`<rect class="ghost c${ui.game.turn} ${result?.ok?'valid':'invalid'}" x="${x*30+1.5}" y="${y*30+1.5}" width="27" height="27" rx="3.6"/>`).join('');
+  group.innerHTML=cells.map(([x,y])=>`<rect class="ghost c${ui.game.turn} ${result?.ok?'valid':'invalid'}" x="${x*30+1.5}" y="${y*30+1.5}" width="27" height="27" rx="3.6"/>`).join('')+(move?`<path class="preview-outline c${ui.game.turn}" d="${previewOutline(cells)}"/>`:'');
   if(message) {message.textContent=!ui.selected?t('chooseHelp'):!move?t('selectPosition'):`${t(result.ok?'legal':result.code)} (${move.x+1}, ${move.y+1})${hintLabel?' / '+hintLabel:''}`;message.className=result?.ok?'valid-message':'';}
   if(confirm) confirm.disabled=!canPlay()||!result?.ok;
   const dock=$('[data-action="confirm-move"]');if(dock) dock.disabled=!canPlay()||!result?.ok;

@@ -1,5 +1,18 @@
 import { transform, pieceSize, COLORS } from '../shared/rules.mjs';
 
+/** Only exposed cell edges belong to the preview outline; internal joins never glow. */
+export function previewOutline(cells) {
+  const occupied=new Set(cells.map(([x,y])=>`${x},${y}`)),edges=[];
+  for(const [x,y] of cells) {
+    const left=x*30,top=y*30,right=left+30,bottom=top+30;
+    if(!occupied.has(`${x},${y-1}`)) edges.push(`M${left} ${top}H${right}`);
+    if(!occupied.has(`${x+1},${y}`)) edges.push(`M${right} ${top}V${bottom}`);
+    if(!occupied.has(`${x},${y+1}`)) edges.push(`M${right} ${bottom}H${left}`);
+    if(!occupied.has(`${x-1},${y}`)) edges.push(`M${left} ${bottom}V${top}`);
+  }
+  return edges.join('');
+}
+
 /** One shape renderer serves the tray and the enlarged current selection. */
 export function pieceSVG(id,orientation=0,{tight=false}={}) {
   const cells=transform(id,orientation),w=Math.max(...cells.map(c=>c[0]))+1,h=Math.max(...cells.map(c=>c[1]))+1;

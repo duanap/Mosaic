@@ -8,6 +8,41 @@ import { newGame, applyMove, findMove, exportReplay } from '../shared/rules.mjs'
 const {chromium}=createRequire(import.meta.url)(process.env.DJQ_PLAYWRIGHT_MODULE||'playwright');
 const viewports=[[1920,1080],[1600,900],[1366,768],[1280,800],[1024,768],[844,390],[932,430],[390,844],[360,800]];
 
+test('minimal board chrome, color breathing outline and stacked transform buttons',async()=>{
+  const app=createApp();await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
+  const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
+  try {
+    const context=await browser.newContext({viewport:{width:1366,height:768},reducedMotion:'no-preference'}),page=await context.newPage();
+    page.setDefaultTimeout(10000);await page.goto(`http://127.0.0.1:${app.server.address().port}`);await page.locator('#local-start').click();
+    assert.equal(await page.locator('.board-heading,.board-meta,.player-type,.player-score span,.control-heading>div>span').count(),0);
+    assert.equal(await page.locator('#board text').count(),0);
+    assert.ok((await page.locator('.color-mark').allTextContents()).every(text=>text===''));
+    assert.ok((await page.locator('.color-mark').all()).length>0);
+    await page.locator('[data-piece="I5"]').click();
+    const rotate=await page.locator('#rotate').boundingBox(),flip=await page.locator('#flip').boundingBox();
+    assert.ok(Math.abs(rotate.x-flip.x)<1&&flip.y>=rotate.y+rotate.height,'rotate/flip form one column');
+    assert.equal(await page.locator('#preview rect').count(),5);
+    const outline=page.locator('#preview .preview-outline');assert.equal(await outline.count(),1);
+    const colors=await outline.evaluate(el=>({stroke:getComputedStyle(el).stroke,fill:getComputedStyle(document.querySelector('#preview rect')).fill}));
+    assert.equal(colors.stroke,colors.fill,'preview perimeter uses the actual piece color');
+    const phases=await outline.evaluate(async el=>{
+      const animation=el.getAnimations()[0];if(!animation)throw Error('Missing breathing animation');
+      animation.pause();animation.currentTime=0;await new Promise(requestAnimationFrame);
+      const start={filter:getComputedStyle(el).filter,opacity:getComputedStyle(el).strokeOpacity};
+      animation.currentTime=1100;await new Promise(requestAnimationFrame);
+      return {name:getComputedStyle(el).animationName,start,peak:{filter:getComputedStyle(el).filter,opacity:getComputedStyle(el).strokeOpacity}};
+    });
+    assert.equal(phases.name,'preview-breathe');assert.notEqual(phases.start.filter,phases.peak.filter);assert.ok(Number(phases.peak.opacity)>Number(phases.start.opacity));
+    await page.locator('#confirm-move').click();assert.equal(await outline.count(),0,'committed pieces stop glowing');
+    await page.locator('[data-piece="I5"]').click();const yellow=await outline.evaluate(el=>getComputedStyle(el).stroke);assert.notEqual(yellow,colors.stroke);
+    await page.locator('#board').focus();await page.keyboard.press('ArrowDown');
+    assert.equal(await page.locator('#confirm-move').isDisabled(),true);assert.equal(await outline.evaluate(el=>getComputedStyle(el).stroke),yellow,'invalid feedback does not change the glow color');
+    await page.emulateMedia({reducedMotion:'reduce'});assert.equal(await outline.evaluate(el=>getComputedStyle(el).animationName),'none');
+    await page.setViewportSize({width:390,height:844});await page.locator('#rotate').scrollIntoViewIfNeeded();
+    const mobileRotate=await page.locator('#rotate').boundingBox(),mobileFlip=await page.locator('#flip').boundingBox();assert.ok(Math.abs(mobileRotate.x-mobileFlip.x)<1&&mobileFlip.y>=mobileRotate.y+mobileRotate.height);
+  } finally {await browser.close();app.shutdown();await new Promise(r=>app.server.close(r));}
+});
+
 test('UI 2.0 fits actual games across desktop tablet and phone sizes',async t=>{
   const app=createApp();await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
   const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
@@ -69,6 +104,7 @@ test('presence snapshots preserve captured drag while the new layout defers rend
     const a=await browser.newPage({viewport:{width:1366,height:768}}),b=await browser.newPage(),base=`http://127.0.0.1:${app.server.address().port}`;
     await a.goto(base);await a.locator('#mode-2').click();await a.locator('#create-room').click();const code=await a.locator('#room-code').innerText();
     await b.goto(base);await b.locator('#room-code-input').fill(code);await b.locator('#join-room').click();await a.locator('#online-start').click();
+    await a.locator('.match-header #countdown').waitFor();assert.equal(await a.locator('.board-section #countdown').count(),0);
     await a.locator('[data-piece="F5"]').click();const board=await a.locator('#board').boundingBox(),cell=board.width/20,last=await a.locator('#preview rect').last().boundingBox(),x=last.x+last.width/2,y=last.y+last.height/2;
     await a.evaluate(()=>{window.testCapturedBoard=document.querySelector('#board');});
     await a.mouse.move(x,y);await a.mouse.down();await a.mouse.move(x+cell*2,y+cell*2,{steps:3});
