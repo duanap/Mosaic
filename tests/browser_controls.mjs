@@ -38,7 +38,7 @@ test('portrait selection preserves scroll, splits preview equally and precedes s
       assert.ok(Math.abs(preview.width-tools.width)<1,'preview and actions each get half the row');assert.ok(Math.abs(preview.width-preview.height)<1,'preview card is square');
       const controls=await page.locator('#game-controls').boundingBox(),seats=await page.locator('.players-panel').boundingBox(),main=await page.locator('#piece-controls').boundingBox(),aux=await page.locator('.auxiliary-panel').boundingBox();
       assert.ok(controls.y+controls.height<=seats.y);assert.ok(aux.y>=main.y+main.height+8);
-      assert.equal(await page.locator('#piece-controls #show-corners').count(),0);assert.equal(await page.locator('.auxiliary-panel #show-corners,.auxiliary-panel #export-replay,.auxiliary-panel #confirm-move').count(),3);
+      assert.equal(await page.locator('.transform-tools #show-corners').count(),1);assert.equal(await page.locator('.auxiliary-panel #export-replay,.auxiliary-panel #confirm-move').count(),2);
       assert.equal(await page.locator('.player-state>span:first-child').nth(1).innerText(),'等待回合');
       assert.equal(await page.locator('.player-state>span:first-child+.player-colors').count(),4);
       assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
@@ -62,12 +62,15 @@ test('finished game announces winners once, closes for board inspection and rema
     await page.locator('#close-modal').click();assert.equal(await page.locator('#modal').isVisible(),false);
     await page.locator('#theme-toggle').click();assert.equal(await page.locator('#modal').isVisible(),false,'ordinary renders do not reopen a dismissed result');
     assert.equal((await page.locator('#confirm-move').innerText()).trim(),'再来一局');assert.equal(await page.locator('#confirm-move').isDisabled(),false);
-    await page.setViewportSize({width:844,height:390});await page.locator('#dock-pieces').click();assert.equal(await page.locator('#game-controls').isVisible(),true,'finished games still allow export and result inspection');
-    await page.locator('#result-button').click();await page.keyboard.press('Escape');assert.equal(await page.locator('#modal').isVisible(),false);assert.equal(await page.locator('#game-controls').isVisible(),true,'native result dialog handles Escape before drawer shortcuts');
-    await page.locator('#result-button').click();await page.locator('#rematch').click();assert.equal(await page.locator('#move-number').innerText(),'0');assert.equal(await page.locator('#modal').isVisible(),false);
-    await page.setViewportSize({width:1366,height:768});
-    await page.locator('#home-button').click();await page.evaluate(record=>localStorage.setItem('djq-local-v1',JSON.stringify(record)),record);await page.reload();await page.locator('#resume-local').click();await page.keyboard.press('Escape');
+    for(const [width,height] of [[1366,768],[844,390],[390,844]]) {
+      await page.setViewportSize({width,height});
+      assert.equal(await page.locator('#undo,#result-button,.mobile-dock').count(),0,'finished game removes undo, result shortcut and bottom dock');
+      assert.equal(await page.locator('#game-controls').isVisible(),true);assert.equal(await page.locator('#confirm-move').isEnabled(),true);
+      if(width===844) {const confirm=await page.locator('#confirm-move').boundingBox();assert.ok(confirm.y>=0&&confirm.y+confirm.height<=height,'main rematch remains on screen without a bottom dock');await page.screenshot({path:'artifacts/browser/ui-v2/phone-landscape-finished.png',fullPage:true});}
+    }
     await page.locator('#confirm-move').click();assert.equal(await page.locator('#move-number').innerText(),'0');
+    await page.setViewportSize({width:1366,height:768});
+    await page.locator('#home-button').click();await page.evaluate(record=>localStorage.setItem('djq-local-v1',JSON.stringify(record)),record);await page.reload();await page.locator('#resume-local').click();await page.locator('#rematch').click();assert.equal(await page.locator('#move-number').innerText(),'0');
   } finally {await browser.close();app.shutdown();await new Promise(r=>app.server.close(r));}
 });
 
@@ -76,7 +79,10 @@ test('selection, Enter/T shortcuts, merged confirmation and header history dialo
   const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
   try {
     const page=await browser.newPage({viewport:{width:1366,height:768}});page.setDefaultTimeout(10000);
-    await page.goto(`http://127.0.0.1:${app.server.address().port}`);await page.locator('#local-start').click();
+    await page.goto(`http://127.0.0.1:${app.server.address().port}`);
+    assert.doesNotMatch(await page.locator('.home-shell').innerText(),/SMALL BOARD|BIG POSSIBILITIES|NEW ANGLE|LITTLE SQUARES|SAME SCREEN|PLAY TOGETHER|LET'S PLAY/);
+    await mkdir('artifacts/browser/ui-v2',{recursive:true});await page.screenshot({path:'artifacts/browser/ui-v2/home-light.png',fullPage:true});
+    await page.locator('#local-start').click();
     // Reproduce the reported defect: a mouse selection left focus on the tray button.
     await page.locator('[data-piece="I5"]').click();await page.keyboard.press('Enter');
     assert.equal(await page.locator('#move-number').innerText(),'1','Enter confirms immediately after selecting a valid piece');
@@ -87,7 +93,7 @@ test('selection, Enter/T shortcuts, merged confirmation and header history dialo
     assert.equal(await page.locator('#board').evaluate(n=>n===document.activeElement),true);
     assert.match(await page.locator('#selected-piece-meta').innerText(),/^[A-Z][1-5]$/);
     assert.equal(await page.locator('#selected-piece-meta small,#selected-piece-meta span').count(),0);
-    const flip=await page.locator('#flip').boundingBox(),hint=await page.locator('#hint').boundingBox();assert.ok(hint.y>=flip.y+flip.height&&Math.abs(hint.x-flip.x)<1);
+    const corners=await page.locator('#show-corners').boundingBox(),hint=await page.locator('#hint').boundingBox();assert.ok(hint.y>=corners.y+corners.height&&Math.abs(hint.x-corners.x)<1);
     await page.keyboard.press('Enter');assert.equal(await page.locator('#move-number').innerText(),'2');
     await page.locator('[data-piece="F5"]').click();assert.equal(await page.locator('#confirm-move').isDisabled(),true);
     assert.notEqual((await page.locator('#confirm-move').innerText()).trim(),'确认落子');await page.keyboard.press('Enter');assert.equal(await page.locator('#move-number').innerText(),'2');

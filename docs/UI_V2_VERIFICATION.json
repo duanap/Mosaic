@@ -16,7 +16,8 @@
     "failed": 0,
     "engine": "Installed Edge/Chromium headless",
     "mode": "Actual loopback HTTP/SSE, native storage, CSP, module workers and CDP touch",
-    "log": "artifacts/ui-v2-followup-browser-final.log"
+    "log": "artifacts/ui-v2-cleanup-browser.log",
+    "additionalCheck": "artifacts/ui-v2-cleanup-ended.log"
   },
   "viewports": [
     {
@@ -90,7 +91,7 @@
     "minimal board captions and letter-free color markers",
     "current-color perimeter breathing, no internal seams, removed on commit",
     "static glow for reduced-motion preferences",
-    "single-column transform buttons and header countdown",
+    "stacked connection/hint buttons and header countdown",
     "Enter confirms after pointer selection and T requests a hint",
     "disabled confirmation carries validation or waiting feedback",
     "top navigation history modal receives live SSE changes",
@@ -102,9 +103,15 @@
     "portrait square preview and transform tools split row width equally",
     "puzzle controls precede seats and auxiliary buttons form a separate card",
     "player colors follow turn status",
-    "one-time winner modal supports dismissal and reopening",
-    "finished landscape retains operation drawer, export and board inspection",
-    "local rematch from dialog and primary button; online rematch remains host-only"
+    "one-time winner modal supports dismissal for board inspection",
+    "finished landscape exposes side controls without a bottom dock",
+    "local rematch from dialog and primary button; online rematch remains host-only",
+    "viewport-centered match summary at nine sizes",
+    "square equal-column preview at every tested size",
+    "R/F shortcuts work after removing preview transform buttons",
+    "finished games omit undo, result shortcut and bottom dock",
+    "main rematch remains visible in finished short landscape",
+    "home removes English decorative slogans and subtitles"
   ],
   "unchanged": [
     "shared rules/strategy",
@@ -118,7 +125,9 @@
     "docs/screenshots/ui-v2/phone-landscape-drawer.png",
     "docs/screenshots/ui-v2/history-dialog.png",
     "docs/screenshots/ui-v2/phone-portrait-controls.png",
-    "docs/screenshots/ui-v2/result-dialog.png"
+    "docs/screenshots/ui-v2/result-dialog.png",
+    "docs/screenshots/ui-v2/home-light.png",
+    "docs/screenshots/ui-v2/phone-landscape-finished.png"
   ],
   "notVerified": [
     "physical Android/iOS Safari",

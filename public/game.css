@@ -420,7 +420,7 @@ body[data-screen="game"] #app {
   .game-shell-v2 .selection-preview .selected-piece {height:100%; padding:22px 9px 9px}
   .game-shell-v2 .selected-piece-art {height:auto; flex:1; min-height:0}
   .game-shell-v2 .selected-piece-art svg {max-width:none; min-height:0}
-  .game-shell-v2 .transform-tools {align-self:stretch; grid-template-rows:repeat(3,minmax(44px,1fr))}
+  .game-shell-v2 .transform-tools {align-self:stretch; grid-template-rows:repeat(2,minmax(44px,1fr))}
   .game-shell-v2 .transform-tools .tool-button {min-height:44px}
   .game-shell-v2 .auxiliary-panel {border-radius:14px}
 }
@@ -431,4 +431,29 @@ body[data-screen="game"] #app {
   .game-shell-v2 .auxiliary-panel {padding:10px 14px; border-radius:14px}
   .game-shell-v2 .auxiliary-panel .auxiliary-actions .text-button {min-height:34px}
   .game-shell-v2 .auxiliary-panel .commit-section {padding-top:8px; margin-top:8px}
+}
+
+/* Center the match summary independently of unequal brand/navigation widths. */
+.match-header {grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}
+.match-context {justify-self:center; text-align:center}
+.game-shell-v2 .selection-tools {grid-template-columns:repeat(2,minmax(0,1fr)); align-items:stretch}
+.game-shell-v2 .selection-preview {width:100%; aspect-ratio:1; align-self:start}
+.game-shell-v2 .selection-preview .selected-piece {height:100%; padding:22px 9px 9px}
+.game-shell-v2 .selected-piece-art {height:auto; flex:1; min-height:0}
+.game-shell-v2 .selected-piece-art svg {max-width:none; min-height:0}
+.game-shell-v2 .transform-tools {align-self:stretch; grid-template-rows:repeat(2,minmax(44px,1fr))}
+@media (max-width:1200px) and (min-width:761px) {
+  .match-header .text-button>span {display:none}
+}
+@media (max-width:760px) {
+  .match-header {grid-template-columns:minmax(0,1fr) auto}
+  .match-context {justify-self:stretch; text-align:center}
+}
+@media (min-width:600px) and (max-height:560px) and (orientation:landscape) {
+  .match-header {display:grid; grid-template-columns:minmax(0,1fr) minmax(0,2fr) minmax(0,1fr)}
+  .match-context {grid-column:2; grid-row:1; justify-self:stretch; max-width:none; text-align:center}
+  .game-shell-v2.is-finished {padding-bottom:8px}
+  .game-shell-v2.is-finished .game-layout {grid-template-columns:120px minmax(0,1fr) 240px}
+  .game-shell-v2.is-finished .controls-column {display:flex; position:static; width:auto}
+  .game-shell-v2.is-finished .close-pieces {display:none}
 }

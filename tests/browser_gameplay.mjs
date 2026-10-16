@@ -44,7 +44,7 @@ test('desktop and touch placement uses held drag and full-piece bounds',async t=
         if(mobile) await page.touchscreen.tap(p.x+p.width/2,p.y+p.height/2); else await page.mouse.click(p.x+p.width/2,p.y+p.height/2);
         assert.notEqual(await rects(),after);
         await page.locator('#board').focus();for(let i=0;i<30;i++) await page.keyboard.press('ArrowRight');
-        await page.locator('#flip').click();
+        await page.locator('#board').focus();await page.keyboard.press('f');
         const cells=await page.locator('#preview rect').evaluateAll(nodes=>nodes.map(n=>[Number(n.getAttribute('x')),Number(n.getAttribute('y'))]));
         assert.ok(cells.every(([x,y])=>x>=0&&x<600&&y>=0&&y<600));
         assert.equal(await page.locator('#move-number').innerText(),'0');

@@ -8,7 +8,7 @@ import { newGame, applyMove, findMove, exportReplay } from '../shared/rules.mjs'
 const {chromium}=createRequire(import.meta.url)(process.env.DJQ_PLAYWRIGHT_MODULE||'playwright');
 const viewports=[[1920,1080],[1600,900],[1366,768],[1280,800],[1024,768],[844,390],[932,430],[390,844],[360,800]];
 
-test('minimal board chrome, color breathing outline and stacked transform buttons',async()=>{
+test('minimal board chrome, color breathing outline and stacked connection and hint buttons',async()=>{
   const app=createApp();await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
   const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
   try {
@@ -19,8 +19,9 @@ test('minimal board chrome, color breathing outline and stacked transform button
     assert.ok((await page.locator('.color-mark').allTextContents()).every(text=>text===''));
     assert.ok((await page.locator('.color-mark').all()).length>0);
     await page.locator('[data-piece="I5"]').click();
-    const rotate=await page.locator('#rotate').boundingBox(),flip=await page.locator('#flip').boundingBox();
-    assert.ok(Math.abs(rotate.x-flip.x)<1&&flip.y>=rotate.y+rotate.height,'rotate/flip form one column');
+    assert.equal(await page.locator('#rotate,#flip').count(),0);
+    const corners=await page.locator('#show-corners').boundingBox(),hint=await page.locator('#hint').boundingBox();
+    assert.ok(Math.abs(corners.x-hint.x)<1&&hint.y>=corners.y+corners.height,'connections sit above hints');
     assert.equal(await page.locator('#preview rect').count(),5);
     const outline=page.locator('#preview .preview-outline');assert.equal(await outline.count(),1);
     const colors=await outline.evaluate(el=>({stroke:getComputedStyle(el).stroke,fill:getComputedStyle(document.querySelector('#preview rect')).fill}));
@@ -38,8 +39,8 @@ test('minimal board chrome, color breathing outline and stacked transform button
     await page.locator('#board').focus();await page.keyboard.press('ArrowDown');
     assert.equal(await page.locator('#confirm-move').isDisabled(),true);assert.equal(await outline.evaluate(el=>getComputedStyle(el).stroke),yellow,'invalid feedback does not change the glow color');
     await page.emulateMedia({reducedMotion:'reduce'});assert.equal(await outline.evaluate(el=>getComputedStyle(el).animationName),'none');
-    await page.setViewportSize({width:390,height:844});await page.locator('#rotate').scrollIntoViewIfNeeded();
-    const mobileRotate=await page.locator('#rotate').boundingBox(),mobileFlip=await page.locator('#flip').boundingBox();assert.ok(Math.abs(mobileRotate.x-mobileFlip.x)<1&&mobileFlip.y>=mobileRotate.y+mobileRotate.height);
+    await page.setViewportSize({width:390,height:844});await page.locator('#show-corners').scrollIntoViewIfNeeded();
+    const mobileCorners=await page.locator('#show-corners').boundingBox(),mobileHint=await page.locator('#hint').boundingBox();assert.ok(Math.abs(mobileCorners.x-mobileHint.x)<1&&mobileHint.y>=mobileCorners.y+mobileCorners.height);
   } finally {await browser.close();app.shutdown();await new Promise(r=>app.server.close(r));}
 });
 
@@ -55,6 +56,7 @@ test('UI 2.0 fits actual games across desktop tablet and phone sizes',async t=>{
         page.setDefaultTimeout(15000);
         page.on('pageerror',e=>errors.push(e.message));await page.goto(`http://127.0.0.1:${app.server.address().port}`);await page.locator('#local-start').click();
         await page.locator('.players-panel').waitFor();
+        const summary=await page.locator('.match-context').boundingBox();assert.ok(Math.abs(summary.x+summary.width/2-width/2)<1,'match summary is centered on the viewport');
         await page.waitForFunction(()=>{const b=document.querySelector('#board').getBoundingClientRect();return Math.abs(b.width-b.height)<1&&b.width>150;});
         const b=await page.locator('#board').boundingBox(),left=await page.locator('.players-panel').boundingBox(),right=await page.locator('.control-panel').boundingBox();
         assert.ok(Math.abs(b.width-b.height)<1);assert.ok(b.x>=0&&b.x+b.width<=width+1);assert.ok(b.y>=0&&b.y+b.height<=height+1);
@@ -70,9 +72,10 @@ test('UI 2.0 fits actual games across desktop tablet and phone sizes',async t=>{
         if(compact) {await page.locator('#dock-pieces').click();await page.locator('#game-controls').waitFor({state:'visible'});}
         await page.locator('[data-piece="F5"]').click();
         if(compact) await page.locator('#dock-pieces').click();
+        const preview=await page.locator('.selection-preview').boundingBox(),tools=await page.locator('.transform-tools').boundingBox();assert.ok(Math.abs(preview.width-preview.height)<1&&Math.abs(preview.width-tools.width)<1,'square preview and equal columns at every size');
         const shape=await page.locator('#selected-piece-preview').innerHTML();assert.match(await page.locator('#selected-piece-meta').innerText(),/F5/);
-        await page.locator('#rotate').click();assert.notEqual(await page.locator('#selected-piece-preview').innerHTML(),shape);
-        await page.locator('#flip').click();assert.equal(await page.locator('#selected-piece-preview rect').count(),5);
+        await page.keyboard.press('r');assert.notEqual(await page.locator('#selected-piece-preview').innerHTML(),shape);
+        await page.keyboard.press('f');assert.equal(await page.locator('#selected-piece-preview rect').count(),5);
         if(compact&&await page.locator('#close-pieces').isVisible()) await page.locator('#close-pieces').click();
         await page.locator('#board').focus();await page.keyboard.press('Escape');
         assert.equal(await page.locator('#preview rect').count(),0);assert.equal(await page.locator('#selected-piece-preview rect').count(),0);
