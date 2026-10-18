@@ -30,6 +30,8 @@ The optional legacy `tests/browser_smoke.py` requires Python Playwright and a se
 
 ## Strategy and concurrency benchmarks
 
+For the rendering/snapshot optimization, retained-node regressions and the fixed-position browser performance comparison, see [PERFORMANCE.md](PERFORMANCE.md). Run `node scripts/benchmark-rendering.mjs 40a407d` with the same optional Playwright/Chromium environment settings as the browser suites. The report measures synthetic handler work and DOM replacements under CPU throttling; it is not physical-device latency.
+
 ```sh
 node scripts/benchmark-bots.mjs --games 40 --seed 20261016 --mode duo --output artifacts/bots/duo.json
 node scripts/benchmark-bots.mjs --games 40 --seed 73011 --mode duo --output artifacts/bots/duo-holdout.json
