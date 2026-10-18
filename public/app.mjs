@@ -92,10 +92,10 @@ function homeView() {
   <section class="play-section"><div class="section-heading"><h2>选择玩法</h2></div>
   ${ui.room?`<div class="active-room panel"><div><strong>你已在房间 ${ui.room.code}</strong><p>关闭菜单不会退出房间，可以随时返回等候室。</p></div><button id="return-room" class="button primary">返回房间${icon('arrow')}</button><button id="home-leave-room" data-action="leave-room" class="text-button">退出房间</button></div>`:''}
   <div class="entry-grid">${[
-    ['local','users','同屏玩法','在同一台设备上轮流操作，可与朋友或人机对战。'],
-    ['create','link','创建房间','设置人数与玩法，邀请朋友或添加人机后开始。'],
-    ['join','arrow','加入房间','输入邀请码，加入朋友的房间。']
-  ].map(([mode,glyph,title,description])=>`<button id="open-${mode}" data-menu="${mode}" class="entry-card panel" ${ui.room?'disabled':''}><span class="card-icon">${icon(glyph)}</span><strong>${title}</strong><span>${description}</span><span class="entry-arrow" aria-hidden="true">${icon('arrow')}</span></button>`).join('')}</div>
+    ['local','同屏玩法','在同一台设备上轮流操作，<br>可与朋友或人机对战。'],
+    ['create','创建房间','设置人数与玩法，<br>邀请朋友或添加人机。'],
+    ['join','加入房间','输入邀请码，<br>加入朋友的房间。']
+  ].map(([mode,title,description])=>`<button id="open-${mode}" data-menu="${mode}" class="entry-card entry-${mode} panel" ${ui.room?'disabled':''}><span class="entry-copy"><strong>${title}</strong><span>${description}</span></span><span class="entry-art" aria-hidden="true"><img src="/assets/lobby-entry-sprites.png" width="1672" height="941" alt="" loading="lazy" decoding="async" draggable="false"></span><span class="entry-arrow" aria-hidden="true">${icon('arrow')}</span></button>`).join('')}</div>
   ${read(LOCAL)?`<button id="resume-local" class="text-button resume" ${ui.room?'disabled':''}>${t('resume')}${icon('back')}</button>`:''}</section>
   ${recoveryView()}<footer class="home-footer"><span>${t('footer')}</span><button id="import-replay" class="text-button" ${ui.room?'disabled':''}>${t('import')}${icon('arrow')}</button></footer></main>`;
 }
