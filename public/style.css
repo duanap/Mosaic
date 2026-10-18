@@ -21,12 +21,37 @@
 .mode-settings{max-width:460px;margin:0 0 20px}.local-seats{border:1px solid var(--line);border-radius:10px;margin:18px 0;padding:12px;display:grid;gap:9px}.local-seats legend{font-size:11px;color:var(--muted);padding:0 6px}.local-seats label{display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:8px;font-size:11px}.local-seats label>span{display:flex;align-items:center;gap:5px;flex-wrap:wrap}.local-seats select{font-size:11px;max-width:145px;padding:7px}.team-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}.team-cards article{padding:13px;border:1px solid var(--line);border-radius:12px;background:var(--accent-soft);display:flex;flex-direction:column;gap:6px;font-size:11px}.team-cards span{color:var(--muted)}.lobby-seat{flex-wrap:wrap}.lobby-buttons{flex-wrap:wrap}.lobby-buttons .fine{flex-basis:100%}.board-svg{cursor:grab}.board-svg:active{cursor:grabbing}@media(max-width:420px){.lobby-seat{gap:8px}.local-seats label>span{max-width:150px}.team-cards{gap:7px}.team-cards article{padding:10px}}
 
 /* Three lobby entry points open native dialogs; creating a room never starts it. */
-.entry-grid {display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px}
-.entry-card {position:relative; display:flex; flex-direction:column; align-items:flex-start; text-align:left; gap:18px; padding:28px; min-height:210px; transition:border-color .15s,box-shadow .15s}
-.entry-card:hover:not(:disabled) {border-color:var(--accent); box-shadow:var(--shadow)}
-.entry-card>strong {font-size:22px; color:var(--ink)}
-.entry-card>span:not(.card-icon):not(.entry-arrow) {font-size:12px; color:var(--muted); line-height:1.8; max-width:90%}
-.entry-card .entry-arrow {position:absolute; right:22px; top:34px; color:var(--accent)}
+.entry-grid {display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px}
+.entry-local {--entry-rgb:31,177,116; --entry-accent:#18a56e; --entry-ink:#173c33; --entry-art-left:0%}
+.entry-create {--entry-rgb:45,139,245; --entry-accent:#2384ed; --entry-ink:#17364e; --entry-art-left:-103.5%}
+.entry-join {--entry-rgb:246,161,45; --entry-accent:#ef941d; --entry-ink:#56351d; --entry-art-left:-193%}
+.entry-card {position:relative; isolation:isolate; display:flex; align-items:flex-start; text-align:left; min-width:0; min-height:260px; padding:26px; overflow:hidden; border:2px solid #fff; border-radius:26px; background:linear-gradient(125deg,#fff 2%,rgba(var(--entry-rgb),.055) 68%,rgba(var(--entry-rgb),.12)); box-shadow:0 12px 30px -22px rgba(var(--entry-rgb),.4),inset 0 0 0 1px #ffffff70; transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
+.entry-card::before,.entry-card::after {content:''; position:absolute; z-index:-1; pointer-events:none; border-radius:48%; transform:rotate(-32deg); background:rgba(var(--entry-rgb),.055)}
+.entry-card::before {width:110%; height:150%; right:-57%; top:-13%}
+.entry-card::after {width:145%; height:80%; right:-43%; bottom:-42%; background:rgba(var(--entry-rgb),.045)}
+.entry-copy {position:relative; z-index:1; display:flex; flex-direction:column; gap:12px; width:60%; margin-top:26px; color:var(--entry-ink)}
+.entry-copy>strong {font-size:clamp(23px,2.05vw,28px); line-height:1.25; font-weight:750; letter-spacing:-.025em}
+.entry-copy>span {font-size:13px; line-height:1.75; color:#687b7d; overflow-wrap:break-word}
+.entry-art {position:absolute; right:10px; bottom:13px; width:54%; aspect-ratio:1; overflow:hidden; pointer-events:none; user-select:none; transition:transform .24s ease}
+.entry-art img {position:absolute; display:block; max-width:none; width:293.3333%; height:auto; left:var(--entry-art-left); top:-20%; pointer-events:none}
+.entry-create .entry-art {clip-path:inset(0 7% 0 0)}
+.entry-card .entry-arrow {position:absolute; left:26px; bottom:23px; display:grid; place-items:center; width:46px; height:46px; border-radius:50%; color:var(--entry-accent); background:#ffffffed; box-shadow:0 8px 18px -10px rgba(var(--entry-rgb),.38),inset 0 0 0 1px #ffffffc0; transition:transform .2s ease}
+.entry-arrow .icon {width:24px; height:24px; stroke-width:3}
+.entry-card:focus-visible {outline:3px solid var(--entry-accent); outline-offset:4px}
+.entry-card:disabled {opacity:.48; box-shadow:none}
+@media(hover:hover) and (pointer:fine) {
+ .entry-card:hover:not(:disabled) {transform:translateY(-4px); border-color:rgba(var(--entry-rgb),.25); box-shadow:0 20px 34px -22px rgba(var(--entry-rgb),.4)}
+ .entry-card:hover:not(:disabled) .entry-art {transform:translateY(-3px) rotate(-2deg)}
+ .entry-card:hover:not(:disabled) .entry-arrow {transform:translateX(3px)}
+}
+[data-theme=dark] .entry-card {border-color:rgba(var(--entry-rgb),.19); background:linear-gradient(125deg,#202d30,rgba(var(--entry-rgb),.085)); box-shadow:inset 0 0 0 1px #ffffff06,0 10px 28px -20px #0009}
+[data-theme=dark] .entry-copy {color:#eef5f4}
+[data-theme=dark] .entry-copy>span {color:#b0c2c6}
+[data-theme=dark] .entry-card .entry-arrow {background:#f4faf7; box-shadow:0 7px 20px -12px #0008}
+@media(prefers-reduced-motion:reduce) {
+ .entry-card,.entry-art,.entry-card .entry-arrow {transition:none}
+ .entry-card:hover:not(:disabled),.entry-card:hover:not(:disabled) .entry-art,.entry-card:hover:not(:disabled) .entry-arrow {transform:none}
+}
 .active-room {display:flex; flex-wrap:wrap; align-items:center; gap:12px; padding:18px; margin-bottom:18px}
 .active-room>div {flex:1; min-width:180px}
 .active-room strong {font-size:14px}
@@ -55,11 +80,24 @@
 .room-menu .lobby-aside h2 {font-size:17px}
 @media(max-width:700px) {
  .entry-grid {grid-template-columns:minmax(0,1fr); gap:12px}
- .entry-card {min-height:150px; padding:22px; gap:12px}
- .entry-card>strong {font-size:20px}
+ .entry-card {min-height:230px; padding:24px; border-radius:24px}
+ .entry-copy {width:62%; margin-top:18px}
+ .entry-copy>strong {font-size:26px}
+ .entry-copy>span {font-size:13px}
+ .entry-art {width:54%; right:8px; bottom:8px; max-width:250px}
+ .entry-card .entry-arrow {left:24px; bottom:22px; width:44px; height:44px}
  .room-menu .lobby-grid {grid-template-columns:minmax(0,1fr)}
  .room-menu .lobby-aside dl {display:flex; flex-wrap:wrap; gap:6px 14px}
  .room-menu .lobby-aside dl>div {flex:1; min-width:120px; gap:8px}
  .setup-form .inline-field {flex-wrap:wrap}
  .setup-form .inline-field select {min-width:0; flex:1}
+}
+@media(min-width:701px) and (max-width:1100px) {
+ .entry-grid {gap:12px}
+ .entry-card {min-height:250px; padding:20px; border-radius:22px}
+ .entry-copy {width:100%; margin-top:5px}
+ .entry-copy>strong {font-size:23px}
+ .entry-copy>span {font-size:12px; line-height:1.65; max-width:100%}
+ .entry-art {width:63%; max-width:150px; right:0; bottom:0}
+ .entry-card .entry-arrow {left:20px; bottom:20px; width:38px; height:38px}
 }

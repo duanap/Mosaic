@@ -21,6 +21,7 @@ const staticFiles=new Map([
   ['/game.css',['public/game.css','text/css; charset=utf-8']],
   ['/game-ui.mjs',['public/game-ui.mjs','text/javascript; charset=utf-8']],
   ['/favicon.svg',['public/favicon.svg','image/svg+xml']],
+  ['/assets/lobby-entry-sprites.png',['public/assets/lobby-entry-sprites.png','image/png']],
   ['/shared/rules.mjs',['shared/rules.mjs','text/javascript; charset=utf-8']]
 ]);
 function securityHeaders(res) {
