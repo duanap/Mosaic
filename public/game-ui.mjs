@@ -1,5 +1,12 @@
 import { transform } from '../shared/rules.mjs';
 
+const regionKeys=new WeakMap();
+/** Build a region only when its inputs change; keep surrounding interactive nodes. */
+export function renderRegion(node,key,markup) {
+  if(!node||regionKeys.has(node)&&regionKeys.get(node)===key) return;
+  node.innerHTML=markup();regionKeys.set(node,key);
+}
+
 /** Only exposed cell edges belong to the preview outline; internal joins never glow. */
 export function previewOutline(cells) {
   const occupied=new Set(cells.map(([x,y])=>`${x},${y}`)),edges=[];
@@ -38,11 +45,12 @@ export function selectionMarkup(piece,orientation,color) {
     <div id="selected-piece-meta" class="selected-piece-meta">${piece?`<strong>${piece}</strong>`:''}</div>`;
 }
 
-let observer;
+let observer,observedFrame;
 /** Fits actual available width AND height without changing the SVG's 600-unit coordinates. */
 export function fitGameBoard(onFit=()=>{}) {
-  observer?.disconnect();observer=null;
   const frame=document.querySelector('.game-shell-v2 .board-frame'),board=frame?.querySelector('#board');
+  if(frame&&frame===observedFrame) {onFit();return;}
+  observer?.disconnect();observer=null;observedFrame=frame;
   if(!frame||!board) return;
   const fit=()=>{
     if(!frame.isConnected) return;

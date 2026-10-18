@@ -27,6 +27,25 @@ test('client rejects stale room snapshots without rolling the UI back',()=>{
   client.adopt({code:'ABC234',version:4});client.adopt({code:'ABC234',version:3});client.adopt({code:'DEF567',version:5});
   assert.equal(states.length,1);assert.equal(states[0].version,4);
 });
+test('HTTP and SSE snapshots of the same version are delivered once, with newer presence accepted',()=>{
+  const states=[],client=new RoomClient({onState:s=>states.push(s),onConnection:()=>{},onLost:()=>{}});
+  client.session={code:'ABC234',token:'x'.repeat(43)};
+  const state={code:'ABC234',version:0,now:1,game:{revision:0}};
+  client.adopt(state);client.adopt({...state,now:2});
+  client.adopt({...state,version:1,players:[{connected:false}]});
+  client.adopt({...state,version:0});
+  assert.deepEqual(states.map(s=>s.version),[0,1]);
+  assert.equal(states[1].players[0].connected,false);
+  for(const version of [undefined,NaN,Infinity,-1,'2',1.5]) client.adopt({...state,version});
+  assert.equal(states.length,2);
+});
+test('reattaching a room resets snapshot deduplication for the newly selected seat',async t=>{
+  browserStorage(t);
+  const client=quietClient(),states=[];client.onState=state=>states.push(state);
+  await client.attach({code:'ABC234',token:'x'.repeat(43)});
+  await client.attach({code:'ABC234',token:'y'.repeat(43)});
+  assert.deepEqual(states.map(s=>s.version),[1,1]);client.stop();
+});
 test('obsolete stream cleanup cannot abort a newly attached stream',async()=>{
   const original=globalThis.fetch,signals=[];
   globalThis.fetch=async(path,options)=>new Promise((resolve,reject)=>{

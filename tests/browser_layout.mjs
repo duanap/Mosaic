@@ -118,6 +118,37 @@ test('presence snapshots preserve captured drag while the new layout defers rend
     const before=await a.locator('#preview').innerHTML();await a.mouse.move(x+cell*3,y+cell*3,{steps:3});assert.notEqual(await a.locator('#preview').innerHTML(),before);
     await a.mouse.up();assert.equal(await a.locator('#preview rect').count(),5);assert.equal(await a.locator('#move-number').innerText(),'0');
     await a.waitForFunction(()=>document.querySelector('[data-player="1"] .player-state').textContent.includes('离线'));
+    assert.equal(await a.evaluate(()=>document.querySelector('#board')===window.testCapturedBoard),true,'presence and gesture completion keep the same board');
+  } finally {await browser.close();app.shutdown();await new Promise(r=>app.server.close(r));}
+});
+
+test('match regions retain board, inventory, focus and scroll across previews, moves and undo',async()=>{
+  const app=createApp();await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
+  const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
+  try {
+    const page=await browser.newPage({viewport:{width:1366,height:768}});
+    await page.goto(`http://127.0.0.1:${app.server.address().port}`);await startLocal(page);
+    await page.evaluate(()=>{
+      window.stableNodes=['#board','.grid-lines','#board-position','#piece-controls','[data-piece="F5"]','#confirm-move','.player-card'].map(s=>[s,document.querySelector(s)]);
+      window.positionMutations=0;
+      new MutationObserver(records=>window.positionMutations+=records.length).observe(document.querySelector('#board-position'),{childList:true,subtree:true});
+    });
+    await page.locator('[data-piece="F5"]').click();
+    for(const key of ['r','f','ArrowRight','Escape']) await page.keyboard.press(key);
+    await page.locator('[data-piece="I5"]').click();await page.locator('#theme-toggle').click();
+    assert.equal(await page.evaluate(()=>stableNodes.every(([s,node])=>node===document.querySelector(s))),true);
+    assert.equal(await page.evaluate(()=>positionMutations),0,'previews and theme never rebuild placed tiles');
+    await page.locator('#board').focus();await page.keyboard.press('r');
+    assert.equal(await page.locator('#board').evaluate(node=>node===document.activeElement),true);
+    await page.keyboard.press('Escape');await page.locator('[data-piece="I5"]').click();await page.keyboard.press('Enter');
+    assert.equal(await page.locator('#move-number').innerText(),'1');
+    assert.ok(await page.evaluate(()=>positionMutations>0),'actual moves update the board content');
+    assert.equal(await page.evaluate(()=>stableNodes.slice(0,-1).every(([s,node])=>node===document.querySelector(s))),true);
+    assert.equal(await page.locator('.piece.selected').count(),0);
+    await page.locator('#undo').click();assert.equal(await page.locator('#move-number').innerText(),'0');
+    assert.equal(await page.evaluate(()=>stableNodes.slice(0,-1).every(([s,node])=>node===document.querySelector(s))),true);
+    await page.locator('[data-piece="I5"]').click();assert.equal(await page.locator('[data-piece="I5"]').getAttribute('aria-pressed'),'true');
+    assert.equal(await page.locator('[data-piece="F5"]').getAttribute('aria-pressed'),'false');
   } finally {await browser.close();app.shutdown();await new Promise(r=>app.server.close(r));}
 });
 

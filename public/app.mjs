@@ -4,7 +4,7 @@ import { RoomClient, savedSession, savedSessions } from '/network.mjs';
 import { t } from '/i18n.mjs';
 import { clampOrigin, hitPreview, rotatePreview, flipPreview, initialPreview, beginGesture, moveGesture, endGesture } from '/placement.mjs';
 import { AnalysisClient } from '/analysis-client.mjs';
-import { pieceSVG, selectionMarkup, fitGameBoard, previewOutline, pieceActionsPosition } from '/game-ui.mjs';
+import { pieceSVG, selectionMarkup, fitGameBoard, previewOutline, pieceActionsPosition, renderRegion } from '/game-ui.mjs';
 
 const $=selector=>document.querySelector(selector);
 const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -53,9 +53,22 @@ const selectedMode=()=>ui.count===4?ui.variant:ui.count===2?'duo':'trio';
 const modeLabel=game=>game.mode==='teams'?'四人双色组队':game.mode==='classic'?'四人各自计分':t('mode'+game.players);
 function modeSettings() {return ui.count===4?`<label class="inline-field mode-settings">四人玩法<select id="game-mode"><option value="classic" ${ui.variant==='classic'?'selected':''}>四人各自计分</option><option value="teams" ${ui.variant==='teams'?'selected':''}>两队双色 · 蓝红 / 黄绿</option></select></label>`:'';}
 function localSeats() {return `<fieldset class="local-seats"><legend>同屏玩家 / 机器人</legend>${Array.from({length:ui.count},(_,i)=>`<label><span>${t('player')} ${i+1} ${ownedColors(ui.count,i).map(badge).join('')}${selectedMode()==='teams'?` / ${i%2?'B':'A'}队`:''}</span><select data-seat-kind="${i}" ${i===0?'disabled':''}><option value="human" ${ui.seatKinds[i]==='human'?'selected':''}>真人</option><option value="bot" ${ui.seatKinds[i]==='bot'?'selected':''}>机器人 · 标准</option></select></label>`).join('')}</fieldset>`;}
+let renderedTray=null;
 function syncTray() {
-  const selected=document.querySelector('[data-piece="'+ui.selected+'"]');
-  if(selected) selected.innerHTML=miniPiece(ui.selected,ui.orientation)+`<span>${ui.selected}</span>`;
+  const tray=$('.piece-tray');if(!tray) return;
+  const color=ui.game.turn,allowed=canPlay(),remaining=ui.game.remaining[color];
+  const key=JSON.stringify([color,allowed,remaining,ui.selected,ui.orientation]);
+  if(renderedTray?.node===tray&&renderedTray.key===key) return;
+  renderedTray={node:tray,key};
+  tray.className=`piece-tray c${color}`;
+  const legend=$('.tray-legend>span');if(legend) legend.className=`c${color}`;
+  tray.querySelectorAll('[data-piece]').forEach(button=>{
+    const piece=button.dataset.piece,selected=piece===ui.selected,used=!remaining.includes(piece),orientation=selected?ui.orientation:0;
+    button.classList.toggle('selected',selected);button.classList.toggle('used',used);
+    if(button.getAttribute('aria-pressed')!==String(selected)) button.setAttribute('aria-pressed',String(selected));
+    if(button.disabled!==(!allowed||used)) button.disabled=!allowed||used;
+    renderRegion(button,orientation,()=>miniPiece(piece,orientation)+`<span>${piece}</span>`);
+  });
 }
 function captureOptions() {
   if($('#player-name')) ui.name=$('#player-name').value;
@@ -72,13 +85,16 @@ function header() {
   <nav aria-label="${t('gameNavigation')}"><button id="rules-button" class="text-button" aria-label="${t('rules')}">${icon('help')}<span>${t('rules')}</span></button>${match?`<button id="log-button" class="text-button" aria-label="${t('log')}">${icon('history')}<span>${t('log')}</span></button>`:''}${match?`<button id="leave-room" class="text-button" aria-label="${t('home')}">${icon('home')}<span>${t('home')}</span></button>`:`<a class="github-link" href="https://github.com/duanap/Mosaic" target="_blank" rel="noopener noreferrer">GitHub ${icon('arrow')}</a>`}<button id="theme-toggle" class="icon-button" aria-label="${t('theme')}">${icon(ui.theme==='dark'?'sun':'moon')}</button></nav></header>`;
 }
 const miniPiece=pieceSVG;
-function boardSVG(game,interactive=true) {
+function boardPosition(game) {
   const tiles=game.board.map((c,index)=>c<0?'':`<rect class="tile c${c}" x="${index%20*30+1.5}" y="${Math.floor(index/20)*30+1.5}" width="27" height="27" rx="3.6"/>`).join('');
   const last=game.history.findLast(a=>a.type==='move');
   const highlight=last?transform(last.move.piece,last.move.orientation).map(([x,y])=>`<rect class="last-tile" x="${(x+last.move.x)*30+4}" y="${(y+last.move.y)*30+4}" width="22" height="22" rx="2"/>`).join(''):'';
   const marks=CORNERS.map(([x,y],c)=>game.started[c]?'':`<g class="start-mark c${c}"><circle cx="${x*30+15}" cy="${y*30+15}" r="11"/></g>`).join('');
+  return tiles+marks+highlight;
+}
+function boardSVG(game,interactive=true) {
   const grid=Array.from({length:21},(_,i)=>`M${i*30} 0V600M0 ${i*30}H600`).join('');
-  return `<svg ${interactive?`id="board" tabindex="0" role="application" aria-label="20 x 20 ${t('title')}. ${t('shortcut')}"`:'aria-hidden="true"'} class="board-svg" viewBox="0 0 600 600"><rect class="board-base" width="600" height="600"/><path class="grid-lines" d="${grid}"/>${tiles}${marks}${highlight}${interactive?'<g id="frontiers"></g><g id="preview" pointer-events="none"></g>':''}</svg>`;
+  return `<svg ${interactive?`id="board" tabindex="0" role="application" aria-label="20 x 20 ${t('title')}. ${t('shortcut')}"`:'aria-hidden="true"'} class="board-svg" viewBox="0 0 600 600"><rect class="board-base" width="600" height="600"/><path class="grid-lines" d="${grid}"/><g ${interactive?'id="board-position"':''}>${boardPosition(game)}</g>${interactive?'<g id="frontiers"></g><g id="preview" pointer-events="none"></g>':''}</svg>`;
 }
 const demo=newGame(4);for(let n=0;n<32;n++) applyMove(demo,findMove(demo));
 function recoveryView() {
@@ -168,20 +184,76 @@ function mobileDock(game) {
   const allowed=canPlay();
   return `<div class="mobile-dock"><div class="dock-status">${badge(game.turn)}<span>${ui.selected??t('noSelection')}</span><small>${t(game.seats[controller(game)].kind==='bot'?'thinking':allowed?'yourTurn':'otherTurn')}</small></div><div class="dock-actions"><button data-action="rotate" ${!allowed||!ui.selected?'disabled':''}>${icon('rotate')}${t('rotate')}</button><button data-action="flip" ${!allowed||!ui.selected?'disabled':''}>${icon('flip')}${t('flip')}</button><button id="dock-pieces" aria-controls="game-controls" aria-expanded="${ui.piecesOpen}">${icon('users')}${t('pieces')}</button><button data-action="confirm-move" class="dock-confirm" disabled>${icon('check')}${t(ui.pending?'submitting':'confirm')}</button></div></div>`;
 }
+function playersPanel(game) {
+  return `<div class="players-heading"><h2 id="players-heading">${t('playersTitle')}</h2><span>${game.players} ${t('people')}</span></div>${playerCards(game)}${teamCards(game)}
+  ${game.players===3?`<div class="neutral-bar">${badge(3)}<strong>${t('neutral')}</strong><span>${t('neutralHelp')}</span><b>${escape(playerName(controller(game,3)))}</b></div>`:''}${ui.mode==='online'?`<div class="table-status">${connectionLabel()}</div>`:''}`;
+}
 function gameView() {
   const game=ui.game;
-  return `<main class="game-shell game-shell-v2 ${ui.view==='game'&&game.status==='finished'?'is-finished':''} ${ui.piecesOpen?'pieces-open':''}"><div class="game-layout"><aside class="players-panel" aria-labelledby="players-heading"><div class="players-heading"><h2 id="players-heading">${t('playersTitle')}</h2><span>${game.players} ${t('people')}</span></div>${playerCards(game)}${teamCards(game)}
-  ${game.players===3?`<div class="neutral-bar">${badge(3)}<strong>${t('neutral')}</strong><span>${t('neutralHelp')}</span><b>${escape(playerName(controller(game,3)))}</b></div>`:''}${ui.mode==='online'?`<div class="table-status">${connectionLabel()}</div>`:''}</aside>
+  return `<main class="game-shell game-shell-v2 ${ui.view==='game'&&game.status==='finished'?'is-finished':''} ${ui.piecesOpen?'pieces-open':''}"><div class="game-layout"><aside class="players-panel" aria-labelledby="players-heading">${playersPanel(game)}</aside>
   <section class="board-section" aria-label="${t('boardTitle')}">
   <div class="board-frame">${boardSVG(game)}<div id="piece-actions" class="piece-actions c${game.turn}" role="group" aria-label="${t('pieceActions')}" hidden><button id="floating-flip" data-action="flip" aria-label="${t('flip')}" title="${t('flip')}">${icon('flip')}</button><button id="floating-confirm" data-action="confirm-move" aria-label="${t('confirm')}" title="${t('confirm')}" disabled>${icon('check')}</button></div></div><span id="move-number" class="visually-hidden">${game.history.filter(a=>a.type==='move').length}</span></section>${controlsAndActions(game)}</div><button id="pieces-backdrop" class="pieces-backdrop" aria-label="${t('closePieces')}" tabindex="-1"></button>${mobileDock(game)}</main>`;
+}
+let renderedView=null,renderedHeader='',renderedPosition=null,positionVersion=0;
+function syncGameView() {
+  const game=ui.game,identity=`${ui.mode}:${ui.room?.code}:${ui.room?.round}`;
+  if(!renderedPosition||renderedPosition.identity!==identity||renderedPosition.revision!==game.revision||
+    ui.mode==='local'&&renderedPosition.game!==game) {
+    positionVersion++;renderedPosition={identity,revision:game.revision,game};
+  }
+  renderRegion($('#board-position'),positionVersion,()=>boardPosition(game));
+  renderRegion($('#move-number'),positionVersion,()=>String(game.history.filter(a=>a.type==='move').length));
+  const playersKey=JSON.stringify([positionVersion,ui.names,ui.room?.you,ui.room?.players.map(p=>p?.connected)]);
+  renderRegion($('.players-panel'),playersKey,()=>playersPanel(game));
+  renderRegion($('.table-status'),ui.connected,connectionLabel);
+
+  const shell=$('.game-shell'),modal=compactGame.matches&&ui.piecesOpen,allowed=canPlay();
+  shell.classList.toggle('is-finished',ui.view==='game'&&game.status==='finished');
+  shell.classList.toggle('pieces-open',ui.piecesOpen);
+  const controls=$('#game-controls');
+  if(modal) {controls.setAttribute('role','dialog');controls.setAttribute('aria-modal','true');}
+  else {controls.removeAttribute('role');controls.removeAttribute('aria-modal');}
+  document.querySelectorAll('.match-header,.players-panel,.board-section,.mobile-dock').forEach(node=>{node.inert=modal;});
+  $('#piece-actions').className=`piece-actions c${game.turn}`;
+  renderRegion($('.auxiliary-actions'),`${positionVersion}:${ui.pending}:${allowed}:${ui.connected}:${ui.showCorners}`,()=>auxiliaryControls(game));
+  $('#show-corners')?.setAttribute('aria-pressed',String(ui.showCorners));
+  if(ui.view==='replay') {
+    $('#replay-label').textContent=`${ui.replayStep} / ${ui.replayRecord.actions.length}`;
+    $('#replay-range').value=ui.replayStep;
+    $('#replay-prev').disabled=ui.replayStep===0;$('#replay-next').disabled=ui.replayStep===ui.replayRecord.actions.length;
+  } else {
+    $('#clear-selection').disabled=!ui.selected;
+    const hint=$('#hint');hint.disabled=!allowed||hintPending;hint.setAttribute('aria-busy',String(hintPending));
+    renderRegion(hint,hintPending,()=>`${icon('hint')}${t(hintPending?'calculating':'hint')}<kbd>T</kbd><small id="hint-sequence"></small>`);
+    $('#confirm-move').setAttribute('aria-busy',String(ui.pending));
+  }
+  let dock=$('.mobile-dock');
+  if(ui.view!=='replay'&&game.status!=='playing') {dock?.remove();dock=null;}
+  else if(!dock) {shell.insertAdjacentHTML('beforeend',mobileDock(game));dock=$('.mobile-dock');}
+  if(dock) {
+    dock.inert=modal;
+    const pieces=$('#dock-pieces');pieces.setAttribute('aria-expanded',String(ui.piecesOpen));
+    if(ui.view==='replay') {
+      pieces.textContent=`${t('replay')} ${ui.replayStep}/${ui.replayRecord.actions.length}`;
+      dock.querySelector('[data-action="replay-prev"]').disabled=ui.replayStep===0;
+      dock.querySelector('[data-action="replay-next"]').disabled=ui.replayStep===ui.replayRecord.actions.length;
+    } else {
+      renderRegion($('.dock-status'),`${game.turn}:${ui.selected}:${allowed}:${game.seats[controller(game)].kind}`,()=>`${badge(game.turn)}<span>${ui.selected??t('noSelection')}</span><small>${t(game.seats[controller(game)].kind==='bot'?'thinking':allowed?'yourTurn':'otherTurn')}</small>`);
+      dock.querySelectorAll('[data-action="rotate"],[data-action="flip"]').forEach(button=>{button.disabled=!allowed||!ui.selected;});
+    }
+  }
 }
 function render() {
   if(drag) return;
   if(ui.view==='game'&&ui.game?.status==='finished'&&!resultAnnounced()) ui.piecesOpen=false;
   const focused=document.activeElement,focusId=focused?.id,focusPiece=focused?.dataset?.piece;
   document.body.dataset.screen=ui.view==='game'||ui.view==='replay'?'game':ui.view;
-  $('#app').innerHTML=header()+(ui.view==='home'?homeView():gameView());
-  if(compactGame.matches&&ui.piecesOpen) document.querySelectorAll('.match-header,.players-panel,.board-section,.mobile-dock').forEach(node=>{node.inert=true;});
+  const nextHeader=header();
+  if(ui.view==='home'||renderedView!==ui.view) {
+    $('#app').innerHTML=nextHeader+(ui.view==='home'?homeView():gameView());renderedPosition=null;
+  } else if(nextHeader!==renderedHeader) $('.site-header').outerHTML=nextHeader;
+  renderedView=ui.view;renderedHeader=nextHeader;
+  if(ui.view!=='home') syncGameView();
   if(ui.game&&ui.view!=='home') {updatePreview();drawFrontiers();}
   fitGameBoard(positionPieceActions);
   updateCountdown();
@@ -189,7 +261,7 @@ function render() {
   syncLogDialog();
   syncResultDialog();
   const replacement=focusId?document.getElementById(focusId):focusPiece?document.querySelector(`[data-piece="${focusPiece}"]`):null;
-  if(replacement&&!replacement.disabled&&replacement.getClientRects().length) replacement.focus({preventScroll:true});
+  if(!focused?.isConnected&&replacement&&!replacement.disabled&&replacement.getClientRects().length) replacement.focus({preventScroll:true});
   scheduleLocalBot();
 }
 function updateCountdown() {
@@ -210,10 +282,12 @@ function positionPieceActions() {
 function updatePreview() {
   const group=$('#preview'),message=$('#preview-status'),confirm=$('#confirm-move');if(!group) return;
   const move=currentMove(),result=move?validateMove(ui.game,move):null;
-  const cells=move?transform(move.piece,move.orientation).map(([x,y])=>[x+move.x,y+move.y]):[];
-  group.innerHTML=cells.map(([x,y])=>`<rect class="ghost c${ui.game.turn} ${result?.ok?'valid':'invalid'}" x="${x*30+1.5}" y="${y*30+1.5}" width="27" height="27" rx="3.6"/>`).join('')+(move?`<path class="preview-outline c${ui.game.turn}" d="${previewOutline(cells)}"/>`:'');
+  renderRegion(group,JSON.stringify([ui.game.turn,move,result?.ok]),()=>{
+    const cells=move?transform(move.piece,move.orientation).map(([x,y])=>[x+move.x,y+move.y]):[];
+    return cells.map(([x,y])=>`<rect class="ghost c${ui.game.turn} ${result?.ok?'valid':'invalid'}" x="${x*30+1.5}" y="${y*30+1.5}" width="27" height="27" rx="3.6"/>`).join('')+(move?`<path class="preview-outline c${ui.game.turn}" d="${previewOutline(cells)}"/>`:'');
+  });
   const feedback=ui.pending?t('submitting'):ui.game.status!=='playing'?t('rematch'):!canPlay()?t(ui.mode==='online'&&!ui.connected?'reconnecting':ui.game.seats[controller(ui.game)].kind==='bot'?'thinking':'otherTurn'):!move?t('noSelection'):result.ok?t('confirm'):`${t(result.code)} (${move.x+1}, ${move.y+1})`;
-  if(message) message.textContent=feedback;
+  if(message&&message.textContent!==feedback) message.textContent=feedback;
   if(confirm) {
     const ended=ui.game.status==='finished';confirm.disabled=ended?!canRematch():!canPlay()||!result?.ok;
     if(ended) confirm.dataset.action='rematch';else delete confirm.dataset.action;
@@ -222,27 +296,30 @@ function updatePreview() {
   document.querySelectorAll('[data-action="confirm-move"]').forEach(button=>{
     button.disabled=!canPlay()||!result?.ok;
     if(button.id==='floating-confirm') {button.title=feedback;button.setAttribute('aria-label',feedback);}
-    else button.innerHTML=`<span>${escape(feedback)}</span>`;
+    else renderRegion(button,feedback,()=>`<span>${escape(feedback)}</span>`);
   });
   const hintStatus=$('#hint-status'),hintSequence=$('#hint-sequence');
-  if(hintStatus) hintStatus.textContent=hintLabel;
-  if(hintSequence) hintSequence.textContent=hintLabel&&hintMoves?.length?`${hintIndex||hintMoves.length}/${hintMoves.length}`:'';
+  if(hintStatus&&hintStatus.textContent!==hintLabel) hintStatus.textContent=hintLabel;
+  const sequence=hintLabel&&hintMoves?.length?`${hintIndex||hintMoves.length}/${hintMoves.length}`:'';
+  if(hintSequence&&hintSequence.textContent!==sequence) hintSequence.textContent=sequence;
   syncTray();
   const selected=$('#selected-piece'),key=`${ui.selected}:${ui.orientation}:${ui.game.turn}`;
   if(selected&&selected.dataset.selection!==key) {selected.innerHTML=selectionMarkup(ui.selected,ui.orientation,ui.game.turn);selected.dataset.selection=key;}
   positionPieceActions();
 }
 function drawFrontiers() {
-  const node=$('#frontiers');if(!node) return;node.innerHTML='';
-  if(!ui.showCorners||ui.game.status!=='playing') return;
-  const g=ui.game,c=g.turn,points=[];
-  const at=(x,y)=>x<0||x>19||y<0||y>19?-2:g.board[y*20+x];
-  if(!g.started[c]) points.push(CORNERS[c]);
-  else for(let y=0;y<20;y++) for(let x=0;x<20;x++) {
-    if(at(x,y)!==-1||[[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy])=>at(x+dx,y+dy)===c)) continue;
-    if([[1,1],[1,-1],[-1,1],[-1,-1]].some(([dx,dy])=>at(x+dx,y+dy)===c)) points.push([x,y]);
-  }
-  node.innerHTML=points.map(([x,y])=>`<circle class="frontier c${c}" cx="${x*30+15}" cy="${y*30+15}" r="3.5"/>`).join('');
+  const node=$('#frontiers');if(!node) return;
+  renderRegion(node,`${positionVersion}:${ui.showCorners}`,()=>{
+    if(!ui.showCorners||ui.game.status!=='playing') return '';
+    const g=ui.game,c=g.turn,points=[];
+    const at=(x,y)=>x<0||x>19||y<0||y>19?-2:g.board[y*20+x];
+    if(!g.started[c]) points.push(CORNERS[c]);
+    else for(let y=0;y<20;y++) for(let x=0;x<20;x++) {
+      if(at(x,y)!==-1||[[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy])=>at(x+dx,y+dy)===c)) continue;
+      if([[1,1],[1,-1],[-1,1],[-1,-1]].some(([dx,dy])=>at(x+dx,y+dy)===c)) points.push([x,y]);
+    }
+    return points.map(([x,y])=>`<circle class="frontier c${c}" cx="${x*30+15}" cy="${y*30+15}" r="3.5"/>`).join('');
+  });
 }
 function saveLocal() {if(ui.mode==='local'&&ui.view==='game') {if(!write(LOCAL,exportReplay(ui.game,ui.names))) toast(t('storageError'));}}
 function beginLocal(record=null) {
@@ -270,7 +347,7 @@ const network=new RoomClient({
     ui.clockOffset=state.now-Date.now();ui.view=state.phase==='waiting'?'home':'game';
     if(state.phase!=='waiting') ui.menu=null;else if(enteredRoom) ui.menu='room';render();
   },
-  onConnection(connected) {ui.connected=connected;if(ui.mode==='online'&&ui.view!=='home') render();},
+  onConnection(connected) {if(ui.connected===connected) return;ui.connected=connected;if(ui.mode==='online'&&ui.view!=='home') render();},
   onLost(code) {ui.mode='local';ui.room=null;ui.game=null;ui.view='home';ui.menu=null;resetSelection();render();toast(t(code));}
 });
 async function commitMove() {
@@ -387,7 +464,7 @@ async function handleButton(button) {
     if(!canPlay()||hintPending) return;
     if(!hintMoves) {
       hintPending=true;const generation=analysisGeneration;
-      button.disabled=true;button.setAttribute('aria-busy','true');button.innerHTML=icon('hint')+t('calculating');
+      render();
       const result=await analysis.analyze({context:generation,kind:'hints',game:ui.game});
       if(generation!==analysisGeneration) return;
       hintPending=false;if(!result) {render();toast(t('analysisFailed'));return;}hintMoves=result.moves;

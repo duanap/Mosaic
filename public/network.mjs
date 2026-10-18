@@ -51,8 +51,8 @@ export class RoomClient {
   }
   adopt(state) {
     if(!state?.code||state.code!==this.session?.code) return;
-    if(state.version<this.lastVersion) return;
-    this.lastVersion=state.version??0;this.onState(state);
+    if(!Number.isSafeInteger(state.version)||state.version<0||state.version<=this.lastVersion) return;
+    this.lastVersion=state.version;this.onState(state);
   }
   async holdSeat(session,automatic) {
     const locks=globalThis.navigator?.locks;if(!locks) return false;
