@@ -23,14 +23,14 @@ function quietClient() {
 
 test('client rejects stale room snapshots without rolling the UI back',()=>{
   const states=[];const client=new RoomClient({onState:s=>states.push(s),onConnection:()=>{},onLost:()=>{}});
-  client.session={code:'ABC234',token:'x'.repeat(43)};
-  client.adopt({code:'ABC234',version:4});client.adopt({code:'ABC234',version:3});client.adopt({code:'DEF567',version:5});
+  client.session={code:'000123',token:'x'.repeat(43)};
+  client.adopt({code:'000123',version:4});client.adopt({code:'000123',version:3});client.adopt({code:'456789',version:5});
   assert.equal(states.length,1);assert.equal(states[0].version,4);
 });
 test('HTTP and SSE snapshots of the same version are delivered once, with newer presence accepted',()=>{
   const states=[],client=new RoomClient({onState:s=>states.push(s),onConnection:()=>{},onLost:()=>{}});
-  client.session={code:'ABC234',token:'x'.repeat(43)};
-  const state={code:'ABC234',version:0,now:1,game:{revision:0}};
+  client.session={code:'000123',token:'x'.repeat(43)};
+  const state={code:'000123',version:0,now:1,game:{revision:0}};
   client.adopt(state);client.adopt({...state,now:2});
   client.adopt({...state,version:1,players:[{connected:false}]});
   client.adopt({...state,version:0});
@@ -42,8 +42,8 @@ test('HTTP and SSE snapshots of the same version are delivered once, with newer 
 test('reattaching a room resets snapshot deduplication for the newly selected seat',async t=>{
   browserStorage(t);
   const client=quietClient(),states=[];client.onState=state=>states.push(state);
-  await client.attach({code:'ABC234',token:'x'.repeat(43)});
-  await client.attach({code:'ABC234',token:'y'.repeat(43)});
+  await client.attach({code:'000123',token:'x'.repeat(43)});
+  await client.attach({code:'000123',token:'y'.repeat(43)});
   assert.deepEqual(states.map(s=>s.version),[1,1]);client.stop();
 });
 test('obsolete stream cleanup cannot abort a newly attached stream',async()=>{
@@ -52,13 +52,13 @@ test('obsolete stream cleanup cannot abort a newly attached stream',async()=>{
     signals.push(options.signal);options.signal.addEventListener('abort',()=>reject(Error('aborted')),{once:true});
   });
   const client=new RoomClient({onState:()=>{},onConnection:()=>{},onLost:()=>{}});
-  client.session={code:'ABC234',token:'x'.repeat(43)};client.running=true;
+  client.session={code:'000123',token:'x'.repeat(43)};client.running=true;
   const first=client.stream();client.stop(false);client.running=true;const second=client.stream();
   try {await new Promise(r=>setTimeout(r,15));assert.equal(signals[1].aborted,false);}
   finally {client.stop(false);await Promise.all([first,second]);globalThis.fetch=original;}
 });
 test('saved session rejects invalid or malformed recovery credentials',()=>{
-  const values=['{}','null','{"code":"ABC234","token":"short"}','not json'];
+  const values=['{}','null','{"code":"000123","token":"short"}','not json'];
   const original=globalThis.sessionStorage;
   try {for(const value of values) {globalThis.sessionStorage={getItem:()=>value};assert.equal(savedSession(),null);}}
   finally {if(original===undefined) delete globalThis.sessionStorage;else globalThis.sessionStorage=original;}
@@ -66,7 +66,7 @@ test('saved session rejects invalid or malformed recovery credentials',()=>{
 
 test('attached seat survives closing its tab without automatically selecting it in a new tab',async t=>{
   browserStorage(t);
-  const seat={code:'ABC234',token:'x'.repeat(43)},client=quietClient();
+  const seat={code:'000123',token:'x'.repeat(43)},client=quietClient();
   await client.attach(seat);client.stop(false);
   globalThis.sessionStorage=storage();
   assert.equal(savedSession(),null);
@@ -77,7 +77,7 @@ test('attached seat survives closing its tab without automatically selecting it 
 
 test('legacy tab session is backed up for recovery and malformed credentials are discarded',t=>{
   browserStorage(t);
-  const seat={code:'ABC234',token:'x'.repeat(43)};
+  const seat={code:'000123',token:'x'.repeat(43)};
   sessionStorage.setItem(SESSION_KEY,JSON.stringify(seat));
   assert.deepEqual(savedSession(),seat);
   assert.equal(JSON.parse(localStorage.getItem(RECOVERY_KEY))?.[0].token,seat.token);
@@ -86,8 +86,8 @@ test('legacy tab session is backed up for recovery and malformed credentials are
 test('leaving clears only the current seat while retaining other saved seats',async t=>{
   browserStorage(t);
   const first=quietClient(),second=quietClient();
-  await first.attach({code:'ABC234',token:'x'.repeat(43)});
-  await second.attach({code:'ABC234',token:'y'.repeat(43)});
+  await first.attach({code:'000123',token:'x'.repeat(43)});
+  await second.attach({code:'000123',token:'y'.repeat(43)});
   first.stop();
   const seats=JSON.parse(localStorage.getItem(RECOVERY_KEY));
   assert.ok(Array.isArray(seats));assert.deepEqual(seats.map(s=>s.token),['y'.repeat(43)]);
@@ -96,7 +96,7 @@ test('leaving clears only the current seat while retaining other saved seats',as
 
 test('transient attach failure retains credentials while invalid rooms remove them',async t=>{
   browserStorage(t);
-  const seat={code:'ABC234',token:'x'.repeat(43)},client=quietClient();
+  const seat={code:'000123',token:'x'.repeat(43)},client=quietClient();
   await client.attach(seat);client.stop(false);
   client.request=async()=>{throw Error('NETWORK_ERROR');};
   await assert.rejects(client.attach(seat),/NETWORK_ERROR/);
@@ -110,33 +110,34 @@ test('transient attach failure retains credentials while invalid rooms remove th
 test('storage denial does not prevent playing or attaching a seat',async t=>{
   browserStorage(t);
   for(const key of ['sessionStorage','localStorage']) Object.defineProperty(globalThis,key,{configurable:true,get(){throw Error('storage blocked');}});
-  const client=quietClient();await client.attach({code:'ABC234',token:'x'.repeat(43)});
+  const client=quietClient();await client.attach({code:'000123',token:'x'.repeat(43)});
   assert.equal(client.running,true);assert.equal(savedSession(),null);client.stop();
 });
 
 test('recovery list rejects corrupt, expired and malformed records',t=>{
   browserStorage(t);
-  const valid={code:'ABC234',token:'x'.repeat(43),expiresAt:Date.now()+60000};
+  const valid={code:'000123',token:'x'.repeat(43),expiresAt:Date.now()+60000};
   for(const raw of ['not json','null','{}']) {
     localStorage.setItem(RECOVERY_KEY,raw);assert.deepEqual(savedSessions(),[]);
   }
   localStorage.setItem(RECOVERY_KEY,JSON.stringify([null,{},valid,{...valid,token:'short'},
-    {...valid,code:['ABC234']},{...valid,expiresAt:Date.now()-1},{...valid,expiresAt:Date.now()+9*3600000}]));
+    {...valid,code:['000123']},{...valid,code:'ABC234'},{...valid,code:123456},{...valid,code:'12345'},
+    {...valid,expiresAt:Date.now()-1},{...valid,expiresAt:Date.now()+9*3600000}]));
   assert.equal(savedSessions().length,1);assert.equal(savedSessions()[0].code,valid.code);
 });
 
 test('recovery records are bounded, deduplicated and retain separate seats in the same room',async t=>{
   browserStorage(t);const client=quietClient();
-  for(let i=0;i<22;i++) await client.attach({code:'ABC234',token:String(i).padStart(43,'x')});
+  for(let i=0;i<22;i++) await client.attach({code:'000123',token:String(i).padStart(43,'x')});
   assert.equal(savedSessions().length,20);
-  await client.attach({code:'ABC234',token:String(21).padStart(43,'x')});
+  await client.attach({code:'000123',token:String(21).padStart(43,'x')});
   assert.equal(savedSessions().length,20);assert.equal(new Set(savedSessions().map(s=>s.token)).size,20);
   assert.ok(savedSessions().every(s=>s.name==='Alice'&&s.seat===0));client.stop(false);
 });
 
 test('stream replacement preserves shared recovery but removes the old tab selection',async t=>{
   browserStorage(t);
-  const seat={code:'ABC234',token:'x'.repeat(43)};
+  const seat={code:'000123',token:'x'.repeat(43)};
   await quietClient().attach(seat);
   const original=globalThis.fetch,lost=[];
   t.after(()=>globalThis.fetch=original);
@@ -149,7 +150,7 @@ test('stream replacement preserves shared recovery but removes the old tab selec
 
 test('stream authorization loss removes only the rejected recovery record',async t=>{
   browserStorage(t);
-  const seat={code:'ABC234',token:'x'.repeat(43)};
+  const seat={code:'000123',token:'x'.repeat(43)};
   await quietClient().attach(seat);
   const original=globalThis.fetch;
   t.after(()=>globalThis.fetch=original);
@@ -164,7 +165,7 @@ test('automatic restoration cannot replace a connected seat when Web Locks are u
   const original=Object.getOwnPropertyDescriptor(globalThis,'navigator');
   Object.defineProperty(globalThis,'navigator',{value:{},configurable:true});
   t.after(()=>{if(original) Object.defineProperty(globalThis,'navigator',original);else delete globalThis.navigator;});
-  const seat={code:'ABC234',token:'x'.repeat(43)},client=quietClient();
+  const seat={code:'000123',token:'x'.repeat(43)},client=quietClient();
   client.request=async()=>({code:seat.code,version:1,you:0,players:[{name:'Alice',connected:true}]});
   await assert.rejects(client.attach(seat,{automatic:true}),/SESSION_REPLACED/);
   assert.equal(savedSession(),null);assert.equal(savedSessions().length,1);
@@ -179,7 +180,7 @@ test('a stolen seat lock stops the old client even if the new connection fails',
   }}}});
   t.after(()=>{if(original) Object.defineProperty(globalThis,'navigator',original);else delete globalThis.navigator;});
   const client=quietClient(),lost=[];client.onLost=reason=>lost.push(reason);t.after(()=>client.stop(false));
-  await client.attach({code:'ABC234',token:'x'.repeat(43)});
+  await client.attach({code:'000123',token:'x'.repeat(43)});
   revoke(Error('lock stolen'));await new Promise(resolve=>setImmediate(resolve));
   assert.equal(client.running,false);assert.deepEqual(lost,['SESSION_REPLACED']);
   assert.equal(savedSession(),null);assert.equal(savedSessions().length,1);

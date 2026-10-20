@@ -20,7 +20,7 @@ let hintMoves=null,hintIndex=0,hintLabel='',analysisGeneration=0,hintPending=fal
 let botGeneration=0,botKey=null;
 const announcedLocalResults=new WeakSet(),announcedOnlineResults=new Set();
 const ui={view:'home',mode:'local',count:4,variant:'classic',seatKinds:['human','human','human','human'],scoring:'bonus',seconds:90,name:read('djq-name',`${t('player')}${Math.floor(Math.random()*900)+100}`),
-  joinCode:new URLSearchParams(location.search).get('room')?.toUpperCase().slice(0,6)??'',
+  joinCode:(code=>/^[0-9]{6}$/.test(code??'')?code:'')(new URLSearchParams(location.search).get('room')),
   menu:null,piecesOpen:false,game:null,room:null,names:[],selected:null,orientation:0,cursor:null,showCorners:false,pending:false,connected:false,
   replayRecord:null,replayStep:0,clockOffset:0,recoveries:[],theme:read('djq-theme',matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')};
 if(!['dark','light'].includes(ui.theme)) ui.theme='light';
@@ -122,8 +122,8 @@ function setupMenu(mode) {
   const modes=`<div class="setup-modes" aria-label="选择人数">${[2,3,4].map(n=>`<button type="button" id="mode-${n}" data-count="${n}" class="${ui.count===n?'selected':''}" aria-pressed="${ui.count===n}"><strong>${n}人</strong><span>${t('mode'+n)}</span></button>`).join('')}</div>${modeSettings()}`;
   const name=`<label>${t('name')}<input id="player-name" required maxlength="20" autocomplete="nickname" value="${escape(ui.name)}"></label>`;
   const scoring=`<label class="inline-field">${t('scoring')}<select id="scoring"><option value="bonus" ${ui.scoring==='bonus'?'selected':''}>${t('bonus')} +15 / +20</option><option value="simple" ${ui.scoring==='simple'?'selected':''}>${t('simple')}</option></select></label>`;
-  return `<form id="setup-form" class="setup-form" data-mode="${mode}"><p class="setup-intro">${local?'选择人数和席位，添加人机后即可在本机开始。':join?'输入朋友提供的6位邀请码，加入后在等候室等待开局。':'创建后进入等候室，邀请朋友或添加人机，再由房主开始。'}</p>
-  ${join?`${name}<label>${t('code')}<input id="room-code-input" required minlength="6" maxlength="6" pattern="[A-HJ-NP-Z2-9]{6}" autocomplete="off" autocapitalize="characters" spellcheck="false" value="${escape(ui.joinCode)}" placeholder="6位邀请码"></label>`:`${modes}${local?localSeats():name}${scoring}${local?'':`<label class="inline-field">${t('turnLimit')}<select id="turn-seconds">${[30,60,90,120].map(n=>`<option value="${n}" ${ui.seconds===n?'selected':''}>${n} ${t('seconds')}</option>`).join('')}</select></label>`}`}
+  return `<form id="setup-form" class="setup-form" data-mode="${mode}"><p class="setup-intro">${local?'选择人数和席位，添加人机后即可在本机开始。':join?'输入朋友提供的6位数字房间号，加入后在等候室等待开局。':'创建后进入等候室，邀请朋友或添加人机，再由房主开始。'}</p>
+  ${join?`${name}<label>${t('code')}<input id="room-code-input" required minlength="6" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" autocomplete="off" spellcheck="false" value="${escape(ui.joinCode)}" placeholder="6位数字房间号"></label>`:`${modes}${local?localSeats():name}${scoring}${local?'':`<label class="inline-field">${t('turnLimit')}<select id="turn-seconds">${[30,60,90,120].map(n=>`<option value="${n}" ${ui.seconds===n?'selected':''}>${n} ${t('seconds')}</option>`).join('')}</select></label>`}`}
   <p id="menu-error" class="menu-error" role="alert"></p><button type="submit" id="${local?'local-start':join?'join-room':'create-room'}" class="button primary wide" ${ui.pending?'disabled':''}>${ui.pending?'请稍候…':local?t('localStart'):join?t('join'):t('create')}${icon('arrow')}</button></form>`;
 }
 function syncHomeDialog() {
@@ -446,7 +446,7 @@ async function handleButton(button) {
   else if(id==='create-room'||id==='join-room') {
     captureOptions();write('djq-name',ui.name);ui.pending=true;ui.mode='online';render();
     try {if(id==='create-room') await network.create({name:ui.name,players:ui.count,mode:selectedMode(),scoring:ui.scoring,turnSeconds:ui.seconds});
-      else await network.join(ui.joinCode.trim().toUpperCase(),ui.name);
+      else await network.join(ui.joinCode.trim(),ui.name);
     } finally {ui.pending=false;render();}
   }
   else if(id==='online-start') {
@@ -525,7 +525,7 @@ for(const root of [$('#app'),$('#modal')]) {
     if(event.target.id==='replay-range') setReplayStep(Number(event.target.value));else {captureOptions();if(event.target.id==='game-mode') render();}
   });
   root.addEventListener('input',event=>{
-    if(event.target.id==='room-code-input') event.target.value=event.target.value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);
+    if(event.target.id==='room-code-input') event.target.value=event.target.value.replace(/[^0-9]/g,'').slice(0,6);
     if(event.target.id==='replay-range') $('#replay-label').textContent=`${event.target.value} / ${ui.replayRecord.actions.length}`;
   });
 }

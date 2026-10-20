@@ -29,6 +29,7 @@ test('health, security headers, static path boundary and unknown methods',async 
 test('real HTTP create, join, authentication and illegal commands',async t=>{
   const {request}=await run(t);
   const a=await request('/api/rooms',{name:'Alice',players:2});assert.equal(a.status,201);
+  assert.match(a.body.room.code,/^[0-9]{6}$/);
   const code=a.body.room.code,b=await request(`/api/rooms/${code}/join`,{name:'Bob'});assert.equal(b.status,201);
   assert.equal((await request(`/api/rooms/${code}`)).status,401);
   const snap=await request(`/api/rooms/${code}`,undefined,a.body.token);assert.equal(snap.body.you,0);

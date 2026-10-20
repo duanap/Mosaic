@@ -2,6 +2,8 @@
 
 All HTTP API responses are JSON except the event stream. Errors are `{ "error": "CODE" }`. POST requests require `Content-Type: application/json`, a maximum 8192-byte body, and same-origin requests when an Origin header is supplied. Use HTTPS in production.
 
+Room codes are strings containing exactly six ASCII digits (`000000`–`999999`), generated with cryptographic randomness and retried on active-room collisions. Preserve leading zeros in URLs, snapshots and saved sessions; mobile joining uses a numeric keyboard. Alphanumeric codes and malformed invitation links are no longer accepted. Deploy client and server together; the service restart discards previous in-memory rooms as usual.
+
 ## Routes
 
 | Method | Path | Authentication | Result |

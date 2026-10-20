@@ -11,6 +11,15 @@ function setup(count=2,options={}) {
 }
 function start(x) {x.store.command(x.code,x.seats[0].token,{type:'start'});return x.store.snapshot(x.code,0);}
 function moveCommand(s) {return {type:'move',round:s.round,revision:s.game.revision,move:findMove(s.game)};}
+
+test('room codes are six-digit strings unique among active rooms',t=>{
+  const store=new RoomStore();t.after(()=>store.close());const codes=new Set();
+  for(let i=0;i<100;i++) {
+    const {room}=store.create({name:'Player',players:2});
+    assert.match(room.code,/^[0-9]{6}$/);assert.equal(codes.has(room.code),false);codes.add(room.code);
+  }
+  for(const invalid of ['ABC234','12345','1234567','１２３４５６',123456]) assert.throws(()=>store.get(invalid),/ROOM_NOT_FOUND/);
+});
 test('room creation, capacity, presence and host-only start',()=>{
   const x=setup(); assert.throws(()=>x.store.join(x.code,'full'),/ROOM_FULL/);
   assert.throws(()=>x.store.command(x.code,x.seats[1].token,{type:'start'}),/HOST_ONLY/);
