@@ -1,6 +1,6 @@
 const SESSION_KEY='djq-room-v1';
 const RECOVERY_KEY='djq-recovery-v1',RECOVERY_TTL=8*3600000;
-const validSession=s=>typeof s?.code==='string'&&/^[A-HJ-NP-Z2-9]{6}$/.test(s.code)&&
+const validSession=s=>typeof s?.code==='string'&&/^[0-9]{6}$/.test(s.code)&&
   typeof s?.token==='string'&&/^[A-Za-z0-9_-]{43}$/.test(s.token);
 export function savedSessions() {
   try {

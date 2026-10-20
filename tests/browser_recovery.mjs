@@ -45,7 +45,7 @@ test('seat recovery in a browser with real storage and HTTP/SSE',async t=>{
       await reopened.locator('[data-recover]').click();await reopened.locator('#room-code').waitFor();
       assert.equal(await reopened.locator('#room-code').innerText(),code);
       assert.equal(await reopened.locator('.lobby-seat:not(.empty)').count(),1);
-      await reopened.locator('#leave-room').click();await reopened.locator('#open-local').waitFor();
+      await reopened.locator('#leave-room').click();await reopened.locator('#open-local:not(:disabled)').waitFor();
       assert.equal(await reopened.locator('[data-recover]').count(),0);
     });
     await t.test('multiple seats in the same browser remain independent during explicit takeover',async t=>{

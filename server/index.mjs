@@ -84,7 +84,7 @@ export function createApp({store=new RoomStore(),requestLimit=240,creationLimit=
         if(pathname==='/api/rooms'&&req.method==='POST') {
           rate(creations,ip,creationLimit,600000);json(res,201,store.create(await body(req)));return;
         }
-        const match=pathname.match(/^\/api\/rooms\/([A-HJ-NP-Z2-9]{6})(?:\/(join|commands|events|replay))?$/);
+        const match=pathname.match(/^\/api\/rooms\/([0-9]{6})(?:\/(join|commands|events|replay))?$/);
         if(!match) throw new RoomError('NOT_FOUND',404);
         const [,code,action]=match;
         if(action==='join'&&req.method==='POST') {

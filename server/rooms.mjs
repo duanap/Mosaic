@@ -3,8 +3,7 @@ import { newGame, applyMove, findMove, controller, resign, validateMove } from '
 import { normalizeMode } from '../shared/modes.mjs';
 import { BotScheduler } from './bots.mjs';
 
-const alphabet='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const codePattern=/^[A-HJ-NP-Z2-9]{6}$/;
+const codePattern=/^[0-9]{6}$/;
 export class RoomError extends Error {
   constructor(code,status=400) {super(code);this.status=status;}
 }
@@ -43,7 +42,7 @@ export class RoomStore {
     displayName(name);
     if(![2,3,4].includes(players)||!['simple','bonus'].includes(scoring)||![30,60,90,120].includes(turnSeconds)) fail('INVALID_OPTIONS');
     try {mode=normalizeMode(players,mode);} catch {fail('INVALID_OPTIONS');}
-    let code;do {code=Array.from({length:6},()=>alphabet[randomInt(alphabet.length)]).join('');} while(this.rooms.has(code));
+    let code;do {code=String(randomInt(1000000)).padStart(6,'0');} while(this.rooms.has(code));
     const room={code,instance:randomBytes(8).toString('hex'),configGeneration:0,botEpoch:0,botJob:null,capacity:players,mode,scoring,turnSeconds,host:0,players:Array(players).fill(null),phase:'waiting',
       game:null,round:0,version:0,deadline:null,createdAt:this.now(),lastHuman:this.now(),endedAt:null};
     this.rooms.set(code,room);return this.addMember(room,0,name);
