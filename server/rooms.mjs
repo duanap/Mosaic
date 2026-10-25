@@ -37,13 +37,13 @@ export class RoomStore {
     room.players[seat]=member;this.tokens.set(token,{code:room.code,seat});room.lastHuman=this.now();
     return {token,seat,room:this.snapshot(room.code,seat)};
   }
-  create({name,players=4,scoring='bonus',turnSeconds=90,mode}={}) {
+  create({name,players=4,scoring='bonus',turnSeconds=90,mode,boardSize=20}={}) {
     if(this.rooms.size>=this.maxRooms) fail('SERVER_FULL',503);
     displayName(name);
-    if(![2,3,4].includes(players)||!['simple','bonus'].includes(scoring)||![30,60,90,120].includes(turnSeconds)) fail('INVALID_OPTIONS');
+    if(![2,3,4].includes(players)||!['simple','bonus'].includes(scoring)||![30,60,90,120].includes(turnSeconds)||![14,20].includes(boardSize)||boardSize===14&&players!==2) fail('INVALID_OPTIONS');
     try {mode=normalizeMode(players,mode);} catch {fail('INVALID_OPTIONS');}
     let code;do {code=String(randomInt(1000000)).padStart(6,'0');} while(this.rooms.has(code));
-    const room={code,instance:randomBytes(8).toString('hex'),configGeneration:0,botEpoch:0,botJob:null,capacity:players,mode,scoring,turnSeconds,host:0,players:Array(players).fill(null),phase:'waiting',
+    const room={code,instance:randomBytes(8).toString('hex'),configGeneration:0,botEpoch:0,botJob:null,capacity:players,boardSize,mode,scoring,turnSeconds,host:0,players:Array(players).fill(null),phase:'waiting',
       game:null,round:0,version:0,deadline:null,createdAt:this.now(),lastHuman:this.now(),endedAt:null};
     this.rooms.set(code,room);return this.addMember(room,0,name);
   }
@@ -61,7 +61,7 @@ export class RoomStore {
   }
   snapshot(code,you=null) {
     const room=this.get(code);
-    return {code,capacity:room.capacity,mode:room.mode,scoring:room.scoring,turnSeconds:room.turnSeconds,host:room.host,phase:room.phase,
+    return {code,capacity:room.capacity,boardSize:room.boardSize,mode:room.mode,scoring:room.scoring,turnSeconds:room.turnSeconds,host:room.host,phase:room.phase,
       round:room.round,version:room.version,deadline:room.deadline,now:this.now(),you,
       players:room.players.map((p,id)=>p?{id,name:p.name,kind:p.kind,...(p.kind==='bot'?{level:p.level}:{}),connected:p.connected,left:p.left}:null),
       game:room.game?structuredClone(room.game):null};
@@ -118,7 +118,7 @@ export class RoomStore {
       if(seat!==room.host) fail('HOST_ONLY',403);
       if(room.phase!=='waiting') fail('GAME_STARTED',409);
       const available=canStart(room);if(!available.ok) fail(available.code,409);
-      room.game=newGame(room.capacity,room.scoring,{mode:room.mode,seats:room.players});room.round++;this.setDeadline(room);
+      room.game=newGame(room.capacity,room.scoring,{mode:room.mode,seats:room.players,boardSize:room.boardSize});room.round++;this.setDeadline(room);
     } else if(type==='move'||type==='resign') {
       if(room.phase!=='playing') fail('GAME_NOT_ACTIVE',409);
       if(command.round!==room.round||command.revision!==room.game.revision) fail('STALE_STATE',409);

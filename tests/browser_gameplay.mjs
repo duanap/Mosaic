@@ -106,7 +106,7 @@ test('local bot play, hint cycling, undo, restore and full-game termination',asy
   try {
     const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.goto(`http://127.0.0.1:${app.server.address().port}`);
-    await openSetup(page,'local');await page.locator('#mode-2').click();await page.locator('[data-seat-kind="1"]').selectOption('bot');await startLocal(page);
+    await openSetup(page,'local');await page.locator('#mode-2').click();await page.locator('[data-seat-kind="1"][value="bot"]').check();await startLocal(page);
     await page.locator('#hint').click();await page.waitForFunction(()=>document.querySelector('#hint-status').textContent.includes('方案 1/'));
     const first=await page.locator('#preview').innerHTML(),piece=await page.locator('.piece.selected').getAttribute('data-piece');
     await page.locator('#hint').click();assert.notEqual(await page.locator('#preview').innerHTML(),first);
@@ -132,7 +132,7 @@ test('four-player team room with two humans and two bots starts directly and rem
   const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
   try {
     const a=await browser.newPage(),b=await browser.newPage(),base=`http://127.0.0.1:${app.server.address().port}`;
-    await a.goto(base);await openSetup(a,'create');await a.locator('#game-mode').selectOption('teams');await a.locator('#create-room').click();
+    await a.goto(base);await openSetup(a,'create');await a.locator('[name="game-mode"][value="teams"]').check();await a.locator('#create-room').click();
     const code=await a.locator('#room-code').innerText();await a.locator('[data-add-bot="2"]').click();await a.locator('[data-add-bot="3"]').click();
     await b.goto(base);await openSetup(b,'join');await b.locator('#room-code-input').fill(code);await b.locator('#join-room').click();
     assert.equal(await a.locator('#ready').count(),0);await a.locator('#online-start').click();

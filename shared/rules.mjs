@@ -4,6 +4,9 @@ import { normalizeMode, normalizeSeats } from './modes.mjs';
 export const SIZE = 20;
 export const COLORS = ['blue', 'yellow', 'red', 'green'];
 export const CORNERS = [[0,0],[19,0],[19,19],[0,19]];
+const smallCorners=[[0,0],[13,0],[13,13],[0,13]];
+export const boardSize=game=>game.boardSize??SIZE;
+export const boardCorners=game=>boardSize(game)===14?smallCorners:CORNERS;
 export const PIECES = [
   ['I1',[[0,0]]], ['I2',[[0,0],[1,0]]],
   ['I3',[[0,0],[1,0],[2,0]]], ['L3',[[0,0],[0,1],[1,1]]],
@@ -27,8 +30,8 @@ Object.freeze(PIECES);
 const byId = new Map(PIECES.map(p=>[p.id,p]));
 const edges = [[1,0],[-1,0],[0,1],[0,-1]];
 const diagonals = [[1,1],[1,-1],[-1,1],[-1,-1]];
-const inside = (x,y) => x>=0 && x<SIZE && y>=0 && y<SIZE;
-const at = (game,x,y) => inside(x,y) ? game.board[y*SIZE+x] : -2;
+const inside = (game,x,y) => x>=0 && x<boardSize(game) && y>=0 && y<boardSize(game);
+const at = (game,x,y) => inside(game,x,y) ? game.board[y*boardSize(game)+x] : -2;
 const transformed = new Map();
 const unique = new Map();
 
@@ -57,9 +60,9 @@ export function variants(id) {
 export const pieceSize = id => byId.get(id)?.cells.length ?? 0;
 export const ownedColors = (players,seat) => players===2 ? [seat,seat+2] : [seat];
 
-export function newGame(players=4,scoring='bonus',{mode,seats}={}) {
-  if(![2,3,4].includes(players) || !['simple','bonus'].includes(scoring)) throw Error('INVALID_OPTIONS');
-  return {players,scoring,mode:normalizeMode(players,mode),seats:normalizeSeats(players,seats),board:Array(400).fill(-1),remaining:Array.from({length:4},()=>PIECES.map(p=>p.id)),
+export function newGame(players=4,scoring='bonus',{mode,seats,boardSize:size=SIZE}={}) {
+  if(![2,3,4].includes(players) || !['simple','bonus'].includes(scoring)||![14,20].includes(size)||size===14&&players!==2) throw Error('INVALID_OPTIONS');
+  return {players,scoring,boardSize:size,mode:normalizeMode(players,mode),seats:normalizeSeats(players,seats),board:Array(size*size).fill(-1),remaining:Array.from({length:4},()=>PIECES.map(p=>p.id)),
     started:[false,false,false,false],stopped:[null,null,null,null],lastPiece:[null,null,null,null],
     resigned:Array(players).fill(false),turn:0,neutralCursor:0,status:'playing',revision:0,history:[]};
 }
@@ -82,11 +85,11 @@ export function validateMove(game,move,color=game.turn) {
   if(!byId.has(piece) || !game.remaining[color].includes(piece)) return fail('PIECE_UNAVAILABLE');
   if(!Number.isInteger(orientation)||orientation<0||orientation>7||!Number.isInteger(x)||!Number.isInteger(y)) return fail('INVALID_MOVE');
   const cells=transform(piece,orientation).map(([dx,dy])=>[x+dx,y+dy]);
-  if(cells.some(([cx,cy])=>!inside(cx,cy))) return fail('OUT_OF_BOUNDS');
+  if(cells.some(([cx,cy])=>!inside(game,cx,cy))) return fail('OUT_OF_BOUNDS');
   if(cells.some(([cx,cy])=>at(game,cx,cy)!==-1)) return fail('OCCUPIED');
   if(cells.some(([cx,cy])=>edges.some(([dx,dy])=>at(game,cx+dx,cy+dy)===color))) return fail('SAME_COLOR_EDGE');
   if(!game.started[color]) {
-    const [sx,sy]=CORNERS[color];
+    const [sx,sy]=boardCorners(game)[color];
     if(!cells.some(([cx,cy])=>cx===sx&&cy===sy)) return fail('START_CORNER');
   } else if(!cells.some(([cx,cy])=>diagonals.some(([dx,dy])=>at(game,cx+dx,cy+dy)===color))) return fail('NEED_CORNER');
   return {ok:true,cells};
@@ -94,7 +97,7 @@ export function validateMove(game,move,color=game.turn) {
 
 /** Frontier search is exhaustive: every legal later move covers an own diagonal. */
 export function legalMoves(game,color=game.turn,preferredPiece=null) {
-  return enumerateMoves(game,color,preferredPiece,{SIZE,CORNERS,variants,validateMove,pieceSize});
+  return enumerateMoves(game,color,preferredPiece,{SIZE:boardSize(game),CORNERS:boardCorners(game),variants,validateMove,pieceSize});
 }
 export function findMove(game,color=game.turn,preferredPiece=null) {return legalMoves(game,color,preferredPiece).next().value??null;}
 
@@ -117,7 +120,7 @@ export function applyMove(game,move,{automatic=false,source=automatic?'timeout':
   if(!result.ok) throw Error(result.code);
   const color=game.turn, player=controller(game),clean={piece:move.piece,orientation:move.orientation,x:move.x,y:move.y};
   if(!['human','bot','timeout'].includes(source)) throw Error('INVALID_MOVE');
-  for(const [x,y] of result.cells) game.board[y*SIZE+x]=color;
+  for(const [x,y] of result.cells) game.board[y*boardSize(game)+x]=color;
   game.remaining[color]=game.remaining[color].filter(id=>id!==move.piece);
   game.started[color]=true;game.lastPiece[color]=move.piece;
   game.history.push({type:'move',color,player,move:clean,automatic:source!=='human',source});
@@ -163,7 +166,7 @@ export function scores(game) {
   return rows;
 }
 export function exportReplay(game,names=[],{seats=game.seats}={}) {
-  return {format:'djq-replay',version:2,players:game.players,scoring:game.scoring,mode:game.mode,seats:normalizeSeats(game.players,seats),
+  return {format:'djq-replay',version:2,players:game.players,scoring:game.scoring,boardSize:boardSize(game),mode:game.mode,seats:normalizeSeats(game.players,seats),
     names:Array.from({length:game.players},(_,i)=>String(names[i]??`P${i+1}`).slice(0,20)),actions:structuredClone(game.history)};
 }
 /** Replay is validated by actually executing every action; no imported board is trusted. */
@@ -171,7 +174,7 @@ export function replay(record,steps=record?.actions?.length) {
   if(!record||record.format!=='djq-replay'||![1,2].includes(record.version)||!Array.isArray(record.actions)||record.actions.length>88||
     !Number.isInteger(steps)||steps<0||steps>record.actions.length) throw Error('INVALID_REPLAY');
   if(record.version===2&&(!Object.hasOwn(record,'mode')||!Object.hasOwn(record,'seats'))) throw Error('INVALID_REPLAY');
-  const game=newGame(record.players,record.scoring,record.version===2?{mode:record.mode,seats:record.seats}:{});
+  const game=newGame(record.players,record.scoring,record.version===2?{mode:record.mode,seats:record.seats,boardSize:record.boardSize}:{});
   for(const action of record.actions.slice(0,steps)) {
     if(!action||typeof action!=='object') throw Error('INVALID_REPLAY');
     if(action.type==='move') {

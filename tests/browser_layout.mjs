@@ -160,7 +160,7 @@ test('UI 2.0 keeps modes, disabled states, replay, drawer focus and rotation cha
     page.setDefaultTimeout(15000);page.on('pageerror',e=>errors.push(e.message));
     const base=`http://127.0.0.1:${app.server.address().port}`;await page.goto(base);
     for(const count of [2,3,4]) {
-      await openSetup(page,'local');await page.locator('#mode-'+count).click();if(count===4) await page.locator('#game-mode').selectOption('teams');
+      await openSetup(page,'local');await page.locator('#mode-'+count).click();if(count===4) await page.locator('[name="game-mode"][value="teams"]').check();
       await startLocal(page);assert.equal(await page.locator('.player-card').count(),count);
       assert.match(await page.locator('.player-card').first().innerText(),count===2?/-178/ : /-89/);
       assert.equal(await page.locator('.neutral-bar').count(),count===3?1:0);assert.equal(await page.locator('.team-cards article').count(),count===4?2:0);

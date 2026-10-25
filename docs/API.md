@@ -4,6 +4,8 @@ All HTTP API responses are JSON except the event stream. Errors are `{ "error": 
 
 Room codes are strings containing exactly six ASCII digits (`000000`–`999999`), generated with cryptographic randomness and retried on active-room collisions. Preserve leading zeros in URLs, snapshots and saved sessions; mobile joining uses a numeric keyboard. Alphanumeric codes and malformed invitation links are no longer accepted. Deploy client and server together; the service restart discards previous in-memory rooms as usual.
 
+Room creation additionally accepts `boardSize: 20 | 14` (default 20). Size 14 requires `players: 2` / `mode: duo`; all four colors retain their full 21-piece inventory. Waiting snapshots and active game data include `boardSize`, preserved for rematches and bot jobs. V2 replay exports include `boardSize`; V1 and older V2 records without that field remain 20×20. Frontend selection, preview coordinates, exhaustive move search and worker evaluation use this size. Publish shared rules, browser modules and server together.
+
 ## Routes
 
 | Method | Path | Authentication | Result |

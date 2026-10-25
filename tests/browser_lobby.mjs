@@ -26,7 +26,7 @@ test('three setup dialogs cancel safely, validate input and start local bots onl
   assert.equal(await page.locator('#room-code-input').evaluate(node=>node.checkValidity()),false);
   await page.locator('#room-code-input').fill('000000');await page.locator('#join-room').click();await page.waitForFunction(()=>document.querySelector('#menu-error').textContent.length>0);
   assert.equal(await page.locator('#modal').isVisible(),true);assert.equal(await page.locator('#room-code-input').inputValue(),'000000');assert.equal(await page.locator('#board').count(),0);await page.keyboard.press('Escape');
-  await openSetup(page,'local');await page.locator('#mode-2').click();await page.locator('[data-seat-kind="1"]').selectOption('bot');await page.screenshot({path:'artifacts/browser/ui-v2/local-setup-mobile.png',fullPage:true});
+  await openSetup(page,'local');await page.locator('#mode-2').click();await page.locator('[data-seat-kind="1"][value="bot"]').check();await page.screenshot({path:'artifacts/browser/ui-v2/local-setup-mobile.png',fullPage:true});
   assert.equal(await page.locator('#board').count(),0);await page.locator('#local-start').click();assert.equal(await page.locator('#modal').isVisible(),false);assert.equal(await page.locator('#board').count(),1);assert.equal(await page.locator('#export-replay').count(),0);
   await page.locator('#hint').click();await page.locator('#confirm-move').click();await page.waitForFunction(()=>Number(document.querySelector('#move-number').textContent)>=2);
   assert.equal(await page.locator('.selection-panel #game-shortcuts').count(),1);assert.equal(await page.locator('.control-panel .selection-tools').count(),0);assert.deepEqual(errors,[]);

@@ -1,22 +1,22 @@
-import { legalMoves, transform, pieceSize, controller, ownedColors, CORNERS } from './rules.mjs';
+import { legalMoves, transform, pieceSize, controller, ownedColors, boardSize, boardCorners } from './rules.mjs';
 const edges=[[1,0],[-1,0],[0,1],[0,-1]],diagonals=[[1,1],[1,-1],[-1,1],[-1,-1]];
-const inside=(x,y)=>x>=0&&x<20&&y>=0&&y<20;
 export const STRATEGY_WEIGHTS=Object.freeze({area:50,connections:4,space:.8,block:2,earlyExpansion:4,lateExpansion:.6,alliedFrontier:4,enemyFrontier:2});
 
 /** Local frontier change and expansion estimate; input position is never changed. */
 export function evaluateMove(game,move,{color=game.turn,weights=STRATEGY_WEIGHTS}={}) {
+  const width=boardSize(game),inside=(x,y)=>x>=0&&x<width&&y>=0&&y<width;
   const cells=transform(move.piece,move.orientation).map(([dx,dy])=>[dx+move.x,dy+move.y]);
-  const covered=new Set(cells.map(([x,y])=>y*20+x)),affected=new Set();
-  const before=(x,y)=>inside(x,y)?game.board[y*20+x]:-2;
-  const after=(x,y)=>inside(x,y)?covered.has(y*20+x)?color:game.board[y*20+x]:-2;
+  const covered=new Set(cells.map(([x,y])=>y*width+x)),affected=new Set();
+  const before=(x,y)=>inside(x,y)?game.board[y*width+x]:-2;
+  const after=(x,y)=>inside(x,y)?covered.has(y*width+x)?color:game.board[y*width+x]:-2;
   const frontier=(at,x,y,c=color)=>at(x,y)===-1&&!edges.some(([dx,dy])=>at(x+dx,y+dy)===c)&&diagonals.some(([dx,dy])=>at(x+dx,y+dy)===c);
-  for(const [x,y] of cells) for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++) if(inside(x+dx,y+dy)) affected.add((y+dy)*20+x+dx);
+  for(const [x,y] of cells) for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++) if(inside(x+dx,y+dy)) affected.add((y+dy)*width+x+dx);
   let connections=0,space=0,block=0,progress=0,alliedFrontier=0,enemyFrontier=0;
   const seat=controller(game,color),allies=new Set(game.mode==='teams'?[seat,(seat+2)%4].flatMap(s=>ownedColors(game.players,s)):ownedColors(game.players,seat));
   // The public green helps its current controller, but its score is never counted as theirs.
   allies.add(color);
   for(const i of affected) {
-    const x=i%20,y=Math.floor(i/20);
+    const x=i%width,y=Math.floor(i/width);
     connections+=Number(frontier(after,x,y))-Number(frontier(before,x,y));
     if(frontier(after,x,y)) for(let dy=-2;dy<=2;dy++) for(let dx=-2;dx<=2;dx++) if(after(x+dx,y+dy)===-1) space+=1/(1+Math.abs(dx)+Math.abs(dy));
     for(let c=0;c<4;c++) if(c!==color&&!game.stopped[c]) {
@@ -24,7 +24,7 @@ export function evaluateMove(game,move,{color=game.turn,weights=STRATEGY_WEIGHTS
       if(allies.has(c)) alliedFrontier+=delta;else enemyFrontier-=delta;
     }
   }
-  const [sx,sy]=CORNERS[color];
+  const [sx,sy]=boardCorners(game)[color];
   for(const [x,y] of cells) {
     progress=Math.max(progress,Math.abs(x-sx)+Math.abs(y-sy));
     for(const [dx,dy] of diagonals) {const c=before(x+dx,y+dy);if(c>=0&&!allies.has(c)) block++;}
