@@ -12,6 +12,33 @@ async function fixture(run) {
   finally {await browser.close();app.shutdown();await new Promise(r=>app.server.close(r));}
 }
 
+test('rules guide is readable, responsive and keeps close available while scrolling',()=>fixture(async({browser,base})=>{
+  const page=await browser.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));await page.goto(base);
+  await mkdir('artifacts/browser/rules',{recursive:true});
+  for(const [width,height] of [[1440,1000],[768,1024],[390,844],[360,800],[320,640],[844,390]]) {
+    await page.setViewportSize({width,height});await page.locator('#rules-button').click();
+    assert.equal(await page.locator('.rules-content>section').count(),6);assert.equal(await page.locator('.rules-mode-grid article').count(),4);
+    const layout=await page.evaluate(()=>{
+      const dialog=document.querySelector('#modal'),content=dialog.querySelector('.rules-content'),title=document.querySelector('#modal-title'),rect=dialog.getBoundingClientRect(),heading=title.getBoundingClientRect();
+      return {modalOverflow:dialog.scrollWidth>dialog.clientWidth+1,contentOverflow:content.scrollWidth>content.clientWidth+1,bodyAlign:getComputedStyle(content.querySelector('p')).textAlign,
+        titleOffset:Math.abs(heading.left+heading.width/2-(rect.left+dialog.clientLeft+dialog.clientWidth/2)),columns:getComputedStyle(document.querySelector('.rules-mode-grid')).gridTemplateColumns.split(' ').length};
+    });
+    assert.equal(layout.modalOverflow,false);assert.equal(layout.contentOverflow,false);assert.equal(layout.bodyAlign,'left');assert.ok(layout.titleOffset<1);
+    assert.equal(layout.columns,width<=600?1:2);
+    assert.match(await page.locator('.rules-mode-grid').innerText(),/每人单色/);assert.match(await page.locator('.rules-mode-grid').innerText(),/每人双色/);
+    const close=await page.locator('#close-modal').boundingBox();
+    await page.locator('.rules-content').evaluate(node=>node.scrollTop=node.scrollHeight);await page.evaluate(()=>new Promise(requestAnimationFrame));
+    const after=await page.locator('#close-modal').boundingBox();assert.ok(Math.abs(close.y-after.y)<1);assert.ok(after.y>=0&&after.y+after.height<=height);
+    await page.locator('.rules-keyboard').scrollIntoViewIfNeeded();assert.equal(await page.locator('.rules-keyboard kbd').count(),6);
+    await page.locator('.rules-content').evaluate(node=>node.scrollTop=0);
+    if([1440,390,320].includes(width)) await page.locator('#modal').screenshot({path:`artifacts/browser/rules/light-${width}.png`});
+    await page.locator('#close-modal').click();assert.equal(await page.locator('#modal').isVisible(),false);
+  }
+  await page.setViewportSize({width:390,height:844});await page.locator('#theme-toggle').click();await page.locator('#rules-button').click();
+  await page.locator('#modal').screenshot({path:'artifacts/browser/rules/dark-390.png'});await page.keyboard.press('Escape');
+  await openSetup(page,'join');assert.equal(await page.locator('#room-code-input').isVisible(),true);assert.deepEqual(errors,[]);
+}));
+
 test('three setup dialogs cancel safely, validate input and start local bots only on submit',()=>fixture(async({app,browser,base})=>{
   const page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true}),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(base);
   assert.equal(await page.locator('.entry-card').count(),3);assert.equal(await page.locator('#board,#setup-form').count(),0);
