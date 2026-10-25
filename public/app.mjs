@@ -1,4 +1,4 @@
-import { PIECES, COLORS, CORNERS, transform, newGame, validateMove, applyMove, findMove,
+import { PIECES, COLORS, boardSize, boardCorners, transform, newGame, validateMove, applyMove, findMove,
   controller, scores, teamScores, resign, replay, exportReplay, ownedColors } from '/shared/rules.mjs';
 import { RoomClient, savedSession, savedSessions } from '/network.mjs';
 import { t } from '/i18n.mjs';
@@ -19,7 +19,11 @@ const botAnalysis=new AnalysisClient();
 let hintMoves=null,hintIndex=0,hintLabel='',analysisGeneration=0,hintPending=false;
 let botGeneration=0,botKey=null;
 const announcedLocalResults=new WeakSet(),announcedOnlineResults=new Set();
-const ui={view:'home',mode:'local',count:4,variant:'classic',seatKinds:['human','human','human','human'],scoring:'bonus',seconds:90,name:read('djq-name',`${t('player')}${Math.floor(Math.random()*900)+100}`),
+function randomNickname() {
+  const pick=values=>values[Math.floor(Math.random()*values.length)];
+  return pick(['薄荷','星光','晴空','云朵','橘子','松果','月光','微风'])+pick(['海獭','熊猫','小鹿','企鹅','松鼠','白鲸','柴犬','布丁'])+String(Math.floor(Math.random()*100)).padStart(2,'0');
+}
+const ui={view:'home',mode:'local',count:4,boardSize:20,variant:'classic',seatKinds:['human','human','human','human'],scoring:'bonus',seconds:90,name:randomNickname(),
   joinCode:(code=>/^[0-9]{6}$/.test(code??'')?code:'')(new URLSearchParams(location.search).get('room')),
   menu:null,piecesOpen:false,game:null,room:null,names:[],selected:null,orientation:0,cursor:null,showCorners:false,pending:false,connected:false,
   replayRecord:null,replayStep:0,clockOffset:0,recoveries:[],theme:read('djq-theme',matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')};
@@ -51,8 +55,14 @@ function setPreview(move) {ui.selected=move.piece;ui.orientation=move.orientatio
 function manualPreview() {hintLabel='';if(hintPending){analysis.cancel();analysisGeneration++;hintPending=false;}}
 const selectedMode=()=>ui.count===4?ui.variant:ui.count===2?'duo':'trio';
 const modeLabel=game=>game.mode==='teams'?'四人双色组队':game.mode==='classic'?'四人各自计分':t('mode'+game.players);
-function modeSettings() {return ui.count===4?`<label class="inline-field mode-settings">四人玩法<select id="game-mode"><option value="classic" ${ui.variant==='classic'?'selected':''}>四人各自计分</option><option value="teams" ${ui.variant==='teams'?'selected':''}>两队双色 · 蓝红 / 黄绿</option></select></label>`:'';}
-function localSeats() {return `<fieldset class="local-seats"><legend>同屏玩家 / 机器人</legend>${Array.from({length:ui.count},(_,i)=>`<label><span>${t('player')} ${i+1} ${ownedColors(ui.count,i).map(badge).join('')}${selectedMode()==='teams'?` / ${i%2?'B':'A'}队`:''}</span><select data-seat-kind="${i}" ${i===0?'disabled':''}><option value="human" ${ui.seatKinds[i]==='human'?'selected':''}>真人</option><option value="bot" ${ui.seatKinds[i]==='bot'?'selected':''}>机器人 · 标准</option></select></label>`).join('')}</fieldset>`;}
+function choiceField(id,label,options,value) {
+  return `<div class="setup-option-row"><span id="${id}-label" class="field-label">${label}</span><div id="${id}" class="choice-options" role="radiogroup" aria-labelledby="${id}-label">${options.map(([key,title,detail])=>`<label class="choice-card"><input id="${id}-${key}" type="radio" name="${id}" value="${key}" ${String(value)===String(key)?'checked':''}><span>${title}${detail?`<small>${detail}</small>`:''}</span></label>`).join('')}</div></div>`;
+}
+function modeSettings() {
+  if(ui.count===2) return choiceField('board-size','棋盘大小',[[20,'20 × 20','标准棋盘'],[14,'14 × 14','紧凑棋盘 · 全套棋子']],ui.boardSize);
+  return ui.count===4?choiceField('game-mode','四人玩法',[['classic','各自计分'],['teams','两队双色','蓝红 / 黄绿']],ui.variant):'';
+}
+function localSeats() {return `<fieldset class="local-seats"><legend>同屏玩家 / 机器人</legend>${Array.from({length:ui.count},(_,i)=>`<div class="seat-config"><span>${t('player')} ${i+1} ${ownedColors(ui.count,i).map(badge).join('')}${selectedMode()==='teams'?` / ${i%2?'B':'A'}队`:''}</span><div class="choice-options seat-options" role="radiogroup" aria-label="${t('player')} ${i+1}">${[['human','真人'],['bot','机器人']].map(([kind,label])=>`<label class="choice-card"><input type="radio" name="seat-${i}" data-seat-kind="${i}" value="${kind}" ${ui.seatKinds[i]===kind?'checked':''} ${i===0?'disabled':''}><span>${label}</span></label>`).join('')}</div></div>`).join('')}</fieldset>`;}
 let renderedTray=null;
 function syncTray() {
   const tray=$('.piece-tray');if(!tray) return;
@@ -73,28 +83,30 @@ function syncTray() {
 function captureOptions() {
   if($('#player-name')) ui.name=$('#player-name').value;
   if($('#room-code-input')) ui.joinCode=$('#room-code-input').value;
-  if($('#scoring')) ui.scoring=$('#scoring').value;
-  if($('#turn-seconds')) ui.seconds=Number($('#turn-seconds').value);
-  if($('#game-mode')) ui.variant=$('#game-mode').value;
-  document.querySelectorAll('[data-seat-kind]').forEach(node=>ui.seatKinds[Number(node.dataset.seatKind)]=node.value);
+  if($('[name="scoring"]:checked')) ui.scoring=$('[name="scoring"]:checked').value;
+  if($('[name="turn-seconds"]:checked')) ui.seconds=Number($('[name="turn-seconds"]:checked').value);
+  if($('[name="game-mode"]:checked')) ui.variant=$('[name="game-mode"]:checked').value;
+  if($('[name="board-size"]:checked')) ui.boardSize=Number($('[name="board-size"]:checked').value);
+  document.querySelectorAll('[data-seat-kind]:checked').forEach(node=>ui.seatKinds[Number(node.dataset.seatKind)]=node.value);
 }
 function header() {
   const match=(ui.view==='game'||ui.view==='replay')&&ui.game;
   return `<header class="site-header ${match?'match-header':''}"><button id="home-button" class="brand" aria-label="${t('home')}"><span class="brand-mark"><i></i><i></i><i></i><i></i></span><strong>${t('title')}</strong><span class="brand-label">DJQ <small>v${APP_VERSION}</small></span></button>
-  ${match?`<div class="match-context"><strong>${t(ui.view==='replay'?'replay':ui.mode)}</strong><span>${ui.game.players} ${t('people')} / ${modeLabel(ui.game)} / ${t(ui.game.scoring)}${ui.mode==='online'&&ui.room?` / ${ui.room.code}`:''}</span>${ui.view==='game'&&ui.mode==='online'&&ui.game.status==='playing'?'<span id="countdown" class="countdown" aria-label="回合剩余时间"></span>':''}</div>`:''}
+  ${match?`<div class="match-context"><strong>${t(ui.view==='replay'?'replay':ui.mode)}</strong><span>${ui.game.players} ${t('people')} / ${modeLabel(ui.game)} / ${boardSize(ui.game)} × ${boardSize(ui.game)} / ${t(ui.game.scoring)}${ui.mode==='online'&&ui.room?` / ${ui.room.code}`:''}</span>${ui.view==='game'&&ui.mode==='online'&&ui.game.status==='playing'?'<span id="countdown" class="countdown" aria-label="回合剩余时间"></span>':''}</div>`:''}
   <nav aria-label="${t('gameNavigation')}"><button id="rules-button" class="text-button" aria-label="${t('rules')}">${icon('help')}<span>${t('rules')}</span></button>${match?`<button id="log-button" class="text-button" aria-label="${t('log')}">${icon('history')}<span>${t('log')}</span></button>`:''}${match?`<button id="leave-room" class="text-button" aria-label="${t('home')}">${icon('home')}<span>${t('home')}</span></button>`:`<a class="github-link" href="https://github.com/duanap/Mosaic" target="_blank" rel="noopener noreferrer">GitHub ${icon('arrow')}</a>`}<button id="theme-toggle" class="icon-button" aria-label="${t('theme')}">${icon(ui.theme==='dark'?'sun':'moon')}</button></nav></header>`;
 }
 const miniPiece=pieceSVG;
 function boardPosition(game) {
-  const tiles=game.board.map((c,index)=>c<0?'':`<rect class="tile c${c}" x="${index%20*30+1.5}" y="${Math.floor(index/20)*30+1.5}" width="27" height="27" rx="3.6"/>`).join('');
+  const size=boardSize(game);
+  const tiles=game.board.map((c,index)=>c<0?'':`<rect class="tile c${c}" x="${index%size*30+1.5}" y="${Math.floor(index/size)*30+1.5}" width="27" height="27" rx="3.6"/>`).join('');
   const last=game.history.findLast(a=>a.type==='move');
   const highlight=last?transform(last.move.piece,last.move.orientation).map(([x,y])=>`<rect class="last-tile" x="${(x+last.move.x)*30+4}" y="${(y+last.move.y)*30+4}" width="22" height="22" rx="2"/>`).join(''):'';
-  const marks=CORNERS.map(([x,y],c)=>game.started[c]?'':`<g class="start-mark c${c}"><circle cx="${x*30+15}" cy="${y*30+15}" r="11"/></g>`).join('');
+  const marks=boardCorners(game).map(([x,y],c)=>game.started[c]?'':`<g class="start-mark c${c}"><circle cx="${x*30+15}" cy="${y*30+15}" r="11"/></g>`).join('');
   return tiles+marks+highlight;
 }
 function boardSVG(game,interactive=true) {
-  const grid=Array.from({length:21},(_,i)=>`M${i*30} 0V600M0 ${i*30}H600`).join('');
-  return `<svg ${interactive?`id="board" tabindex="0" role="application" aria-label="20 x 20 ${t('title')}. ${t('shortcut')}"`:'aria-hidden="true"'} class="board-svg" viewBox="0 0 600 600"><rect class="board-base" width="600" height="600"/><path class="grid-lines" d="${grid}"/><g ${interactive?'id="board-position"':''}>${boardPosition(game)}</g>${interactive?'<g id="frontiers"></g><g id="preview" pointer-events="none"></g>':''}</svg>`;
+  const size=boardSize(game),extent=size*30,grid=Array.from({length:size+1},(_,i)=>`M${i*30} 0V${extent}M0 ${i*30}H${extent}`).join('');
+  return `<svg ${interactive?`id="board" tabindex="0" role="application" aria-label="${size} x ${size} ${t('title')}. ${t('shortcut')}"`:'aria-hidden="true"'} data-size="${size}" class="board-svg" viewBox="0 0 ${extent} ${extent}"><rect class="board-base" width="${extent}" height="${extent}"/><path class="grid-lines" d="${grid}"/><g ${interactive?'id="board-position"':''}>${boardPosition(game)}</g>${interactive?'<g id="frontiers"></g><g id="preview" pointer-events="none"></g>':''}</svg>`;
 }
 const demo=newGame(4);for(let n=0;n<32;n++) applyMove(demo,findMove(demo));
 function recoveryView() {
@@ -120,10 +132,10 @@ function setupMenu(mode) {
   if(mode==='room') return roomMenu();
   const local=mode==='local',join=mode==='join';
   const modes=`<div class="setup-modes" aria-label="选择人数">${[2,3,4].map(n=>`<button type="button" id="mode-${n}" data-count="${n}" class="${ui.count===n?'selected':''}" aria-pressed="${ui.count===n}"><strong>${n}人</strong><span>${t('mode'+n)}</span></button>`).join('')}</div>${modeSettings()}`;
-  const name=`<label>${t('name')}<input id="player-name" required maxlength="20" autocomplete="nickname" value="${escape(ui.name)}"></label>`;
-  const scoring=`<label class="inline-field">${t('scoring')}<select id="scoring"><option value="bonus" ${ui.scoring==='bonus'?'selected':''}>${t('bonus')} +15 / +20</option><option value="simple" ${ui.scoring==='simple'?'selected':''}>${t('simple')}</option></select></label>`;
+  const name=`<label class="setup-input-row"><span class="field-label">${t('name')}</span><input id="player-name" required maxlength="20" autocomplete="nickname" value="${escape(ui.name)}"></label>`;
+  const scoring=choiceField('scoring',t('scoring'),[['bonus',t('bonus'),'+15 / +20'],['simple',t('simple'),'按剩余格数计分']],ui.scoring);
   return `<form id="setup-form" class="setup-form" data-mode="${mode}"><p class="setup-intro">${local?'选择人数和席位，添加人机后即可在本机开始。':join?'输入朋友提供的6位数字房间号，加入后在等候室等待开局。':'创建后进入等候室，邀请朋友或添加人机，再由房主开始。'}</p>
-  ${join?`${name}<label>${t('code')}<input id="room-code-input" required minlength="6" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" autocomplete="off" spellcheck="false" value="${escape(ui.joinCode)}" placeholder="6位数字房间号"></label>`:`${modes}${local?localSeats():name}${scoring}${local?'':`<label class="inline-field">${t('turnLimit')}<select id="turn-seconds">${[30,60,90,120].map(n=>`<option value="${n}" ${ui.seconds===n?'selected':''}>${n} ${t('seconds')}</option>`).join('')}</select></label>`}`}
+  ${join?`${name}<label class="setup-input-row"><span class="field-label">${t('code')}</span><input id="room-code-input" required minlength="6" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" autocomplete="off" spellcheck="false" value="${escape(ui.joinCode)}" placeholder="6位数字房间号"></label>`:`${modes}${local?localSeats():name}${scoring}${local?'':choiceField('turn-seconds',t('turnLimit'),[30,60,90,120].map(n=>[n,`${n} 秒`]),ui.seconds)}`}
   <p id="menu-error" class="menu-error" role="alert"></p><button type="submit" id="${local?'local-start':join?'join-room':'create-room'}" class="button primary wide" ${ui.pending?'disabled':''}>${ui.pending?'请稍候…':local?t('localStart'):join?t('join'):t('create')}${icon('arrow')}</button></form>`;
 }
 function syncHomeDialog() {
@@ -136,7 +148,7 @@ function syncHomeDialog() {
 function actionError(error) {const node=$('#menu-error');if(node) node.textContent=t(error.message);else toast(t(error.message));}
 function roomMenu() {
   const r=ui.room,host=r.you===r.host,full=r.players.every(p=>p&&!p.left),online=r.players.every(p=>p&&(p.kind==='bot'||p.connected));
-  return `<div class="room-menu"><div class="lobby-intro"><p>${t('lobbyDesc')}</p></div><div class="lobby-grid"><section class="lobby-main panel"><div class="lobby-code"><div><span class="eyebrow">${t('code')}</span><strong id="room-code">${r.code}</strong></div><button id="copy-invite" class="button secondary">${icon('link')}${t('invite')}</button></div><div class="lobby-seats">${r.players.map((p,i)=>`<div class="lobby-seat ${p?'':'empty'}"><div class="seat-avatar c${i}">${i+1}</div><div class="seat-name"><strong>${p?escape(p.name):t('empty')}${r.mode==='teams'?` / ${i%2?'B':'A'}队`:''}</strong><span>${ownedColors(r.capacity,i).map(badge).join('')} ${i===r.host?t('host'):''} ${i===r.you?` / ${t('you')}`:''}</span></div><span class="seat-status">${p?p.kind==='bot'?'标准机器人':t(p.connected?'connected':'offline'):''}</span>${host&&!p?`<button class="button secondary small" data-add-bot="${i}"${busy()}>添加机器人</button>`:''}${host&&p?.kind==='bot'?`<button class="text-button" data-remove-bot="${i}"${busy()}>移除</button>`:''}</div>`).join('')}</div><div class="lobby-buttons">${host?`<button id="online-start" class="button primary" ${!full||!online||!ui.connected||ui.pending?'disabled':''}>${t('start')}${icon('arrow')}</button>`:`<span>${t('waitHost')}</span>`}<p class="fine">${!full?'等待朋友加入，或添加机器人补齐空位':!online?'等待真人玩家重新连接':'玩家已就位，由房主开始'}</p></div></section><aside class="panel lobby-aside"><h2>${r.capacity} ${t('people')} / ${r.mode==='teams'?'双色组队':t('mode'+r.capacity)}</h2><dl><div><dt>棋盘</dt><dd>20 &times; 20</dd></div><div><dt>${t('scoring')}</dt><dd>${t(r.scoring)}</dd></div><div><dt>${t('turnLimit')}</dt><dd>${r.turnSeconds} ${t('seconds')}</dd></div></dl><p>${r.mode==='teams'?'蓝红为A队，黄绿为B队。每人控制自己的颜色，按队伍总分结算。':t(r.capacity===3?'neutralHelp':'ruleFirst')}</p>${connectionLabel()}<button id="leave-room" class="text-button" aria-label="${t('home')}">${icon('home')}退出房间</button></aside></div><p class="room-lifecycle">等候室离线席位保留2分钟；房主退出后自动转交。无人房间会清理，房间内的对局不会永久保存。</p></div>`;
+  return `<div class="room-menu"><div class="lobby-intro"><p>${t('lobbyDesc')}</p></div><div class="lobby-grid"><section class="lobby-main panel"><div class="lobby-code"><div><span class="eyebrow">${t('code')}</span><strong id="room-code">${r.code}</strong></div><button id="copy-invite" class="button secondary">${icon('link')}${t('invite')}</button></div><div class="lobby-seats">${r.players.map((p,i)=>`<div class="lobby-seat ${p?'':'empty'}"><div class="seat-avatar c${i}">${i+1}</div><div class="seat-name"><strong>${p?escape(p.name):t('empty')}${r.mode==='teams'?` / ${i%2?'B':'A'}队`:''}</strong><span>${ownedColors(r.capacity,i).map(badge).join('')} ${i===r.host?t('host'):''} ${i===r.you?` / ${t('you')}`:''}</span></div><span class="seat-status">${p?p.kind==='bot'?'标准机器人':t(p.connected?'connected':'offline'):''}</span>${host&&!p?`<button class="button secondary small" data-add-bot="${i}"${busy()}>添加机器人</button>`:''}${host&&p?.kind==='bot'?`<button class="text-button" data-remove-bot="${i}"${busy()}>移除</button>`:''}</div>`).join('')}</div><div class="lobby-buttons">${host?`<button id="online-start" class="button primary" ${!full||!online||!ui.connected||ui.pending?'disabled':''}>${t('start')}${icon('arrow')}</button>`:`<span>${t('waitHost')}</span>`}<p class="fine">${!full?'等待朋友加入，或添加机器人补齐空位':!online?'等待真人玩家重新连接':'玩家已就位，由房主开始'}</p></div></section><aside class="panel lobby-aside"><h2>${r.capacity} ${t('people')} / ${r.mode==='teams'?'双色组队':t('mode'+r.capacity)}</h2><dl><div><dt>棋盘</dt><dd>${r.boardSize??20} &times; ${r.boardSize??20}</dd></div><div><dt>${t('scoring')}</dt><dd>${t(r.scoring)}</dd></div><div><dt>${t('turnLimit')}</dt><dd>${r.turnSeconds} ${t('seconds')}</dd></div></dl><p>${r.mode==='teams'?'蓝红为A队，黄绿为B队。每人控制自己的颜色，按队伍总分结算。':t(r.capacity===3?'neutralHelp':'ruleFirst')}</p>${connectionLabel()}<button id="leave-room" class="text-button" aria-label="${t('home')}">${icon('home')}退出房间</button></aside></div><p class="room-lifecycle">等候室离线席位保留2分钟；房主退出后自动转交。无人房间会清理，房间内的对局不会永久保存。</p></div>`;
 }
 function canPlay() {return ui.view==='game'&&ui.game?.status==='playing'&&!ui.pending&&(ui.mode==='local'?ui.game.seats[controller(ui.game)].kind==='human':(ui.connected&&ui.room?.you===controller(ui.game)));}
 function canRematch() {return ui.view==='game'&&ui.game?.status==='finished'&&!ui.pending&&(ui.mode==='local'||ui.connected&&ui.room?.you===ui.room?.host);}
@@ -249,7 +261,7 @@ function render() {
   const focused=document.activeElement,focusId=focused?.id,focusPiece=focused?.dataset?.piece;
   document.body.dataset.screen=ui.view==='game'||ui.view==='replay'?'game':ui.view;
   const nextHeader=header();
-  if(ui.view==='home'||renderedView!==ui.view) {
+  if(ui.view==='home'||renderedView!==ui.view||$('#board')?.dataset.size!==String(boardSize(ui.game))) {
     $('#app').innerHTML=nextHeader+(ui.view==='home'?homeView():gameView());renderedPosition=null;
   } else if(nextHeader!==renderedHeader) $('.site-header').outerHTML=nextHeader;
   renderedView=ui.view;renderedHeader=nextHeader;
@@ -275,7 +287,7 @@ function positionPieceActions() {
   group.hidden=!move||!canPlay()||compactGame.matches&&ui.piecesOpen;
   if(group.hidden) return;
   const frame=board.parentElement.getBoundingClientRect(),rect=board.getBoundingClientRect();
-  const position=pieceActionsPosition(move,rect,group.getBoundingClientRect());
+  const position=pieceActionsPosition(move,rect,group.getBoundingClientRect(),boardSize(ui.game));
   group.style.left=`${position.x-frame.left}px`;group.style.top=`${position.y-frame.top}px`;
   $('#floating-flip').disabled=!canPlay();
 }
@@ -311,10 +323,10 @@ function drawFrontiers() {
   const node=$('#frontiers');if(!node) return;
   renderRegion(node,`${positionVersion}:${ui.showCorners}`,()=>{
     if(!ui.showCorners||ui.game.status!=='playing') return '';
-    const g=ui.game,c=g.turn,points=[];
-    const at=(x,y)=>x<0||x>19||y<0||y>19?-2:g.board[y*20+x];
-    if(!g.started[c]) points.push(CORNERS[c]);
-    else for(let y=0;y<20;y++) for(let x=0;x<20;x++) {
+    const g=ui.game,c=g.turn,size=boardSize(g),points=[];
+    const at=(x,y)=>x<0||x>=size||y<0||y>=size?-2:g.board[y*size+x];
+    if(!g.started[c]) points.push(boardCorners(g)[c]);
+    else for(let y=0;y<size;y++) for(let x=0;x<size;x++) {
       if(at(x,y)!==-1||[[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy])=>at(x+dx,y+dy)===c)) continue;
       if([[1,1],[1,-1],[-1,1],[-1,-1]].some(([dx,dy])=>at(x+dx,y+dy)===c)) points.push([x,y]);
     }
@@ -323,7 +335,8 @@ function drawFrontiers() {
 }
 function saveLocal() {if(ui.mode==='local'&&ui.view==='game') {if(!write(LOCAL,exportReplay(ui.game,ui.names))) toast(t('storageError'));}}
 function beginLocal(record=null) {
-  ui.mode='local';ui.room=null;ui.replayRecord=null;ui.game=record?replay(record):newGame(ui.count,ui.scoring,{mode:selectedMode(),seats:ui.seatKinds.slice(0,ui.count).map(kind=>kind==='bot'?{kind,level:'standard'}:{kind})});
+  ui.mode='local';ui.room=null;ui.replayRecord=null;ui.game=record?replay(record):newGame(ui.count,ui.scoring,{mode:selectedMode(),boardSize:ui.boardSize,seats:ui.seatKinds.slice(0,ui.count).map(kind=>kind==='bot'?{kind,level:'standard'}:{kind})});
+  ui.boardSize=boardSize(ui.game);
   ui.names=Array.from({length:ui.game.players},(_,i)=>String(record?.names?.[i]??`${ui.game.seats[i].kind==='bot'?'机器人':t('player')} ${i+1}`).slice(0,20));
   ui.menu=null;ui.view='game';resetSelection();saveLocal();render();window.scrollTo(0,0);
 }
@@ -414,7 +427,7 @@ async function resumeOnline(session,automatic=false) {
 }
 function transformSelection(action) {
   if(!canPlay()||!ui.selected) return;
-  manualPreview();setPreview(action==='rotate'?rotatePreview(currentMove()):flipPreview(currentMove()));
+  manualPreview();setPreview(action==='rotate'?rotatePreview(currentMove(),undefined,boardSize(ui.game)):flipPreview(currentMove(),undefined,boardSize(ui.game)));
   render();$('#board').focus({preventScroll:true});
 }
 async function handleButton(button) {
@@ -427,7 +440,7 @@ async function handleButton(button) {
     if(session&&!ui.pending&&!ui.room) {captureOptions();await resumeOnline({code:session.code,token:session.token});}
     return;
   }
-  if(button.dataset.count) {captureOptions();ui.count=Number(button.dataset.count);render();return;}
+  if(button.dataset.count) {captureOptions();ui.count=Number(button.dataset.count);if(ui.count!==2) ui.boardSize=20;render();return;}
   if(button.dataset.addBot!==undefined||button.dataset.removeBot!==undefined) {
     const adding=button.dataset.addBot!==undefined;ui.pending=true;render();
     try {await network.command({type:adding?'set-bot':'remove-bot',seat:Number(adding?button.dataset.addBot:button.dataset.removeBot),...(adding?{level:'standard'}:{})});} finally {ui.pending=false;render();}return;
@@ -444,8 +457,8 @@ async function handleButton(button) {
   else if(id==='local-start') {captureOptions();beginLocal();}
   else if(id==='resume-local') {try{beginLocal(read(LOCAL));}catch{write(LOCAL,null);throw Error('INVALID_REPLAY');}}
   else if(id==='create-room'||id==='join-room') {
-    captureOptions();write('djq-name',ui.name);ui.pending=true;ui.mode='online';render();
-    try {if(id==='create-room') await network.create({name:ui.name,players:ui.count,mode:selectedMode(),scoring:ui.scoring,turnSeconds:ui.seconds});
+    captureOptions();ui.pending=true;ui.mode='online';render();
+    try {if(id==='create-room') await network.create({name:ui.name,players:ui.count,mode:selectedMode(),boardSize:ui.boardSize,scoring:ui.scoring,turnSeconds:ui.seconds});
       else await network.join(ui.joinCode.trim(),ui.name);
     } finally {ui.pending=false;render();}
   }
@@ -494,7 +507,7 @@ async function handleButton(button) {
   }
   else if(id==='rematch') {
     if(!canRematch()) return;$('#modal').close();
-    if(ui.mode==='local') {ui.count=ui.game.players;ui.variant=ui.game.mode==='teams'?'teams':'classic';ui.seatKinds=ui.game.seats.map(s=>s.kind);ui.scoring=ui.game.scoring;beginLocal();}
+    if(ui.mode==='local') {ui.count=ui.game.players;ui.boardSize=boardSize(ui.game);ui.variant=ui.game.mode==='teams'?'teams':'classic';ui.seatKinds=ui.game.seats.map(s=>s.kind);ui.scoring=ui.game.scoring;beginLocal();}
     else {ui.pending=true;render();try{await network.command({type:'rematch'});}finally{ui.pending=false;render();}}
   }
   else if(id==='export-replay') exportFile();
@@ -522,7 +535,7 @@ $('#modal').addEventListener('submit',event=>{
 });
 for(const root of [$('#app'),$('#modal')]) {
   root.addEventListener('change',event=>{
-    if(event.target.id==='replay-range') setReplayStep(Number(event.target.value));else {captureOptions();if(event.target.id==='game-mode') render();}
+    if(event.target.id==='replay-range') setReplayStep(Number(event.target.value));else {captureOptions();if(['game-mode','board-size'].includes(event.target.name)) render();}
   });
   root.addEventListener('input',event=>{
     if(event.target.id==='room-code-input') event.target.value=event.target.value.replace(/[^0-9]/g,'').slice(0,6);
@@ -531,7 +544,7 @@ for(const root of [$('#app'),$('#modal')]) {
 }
 function pointerPoint(event) {
   const r=$('#board').getBoundingClientRect();
-  return {clientX:event.clientX,clientY:event.clientY,x:(event.clientX-r.left)/r.width*20,y:(event.clientY-r.top)/r.height*20};
+  return {clientX:event.clientX,clientY:event.clientY,x:(event.clientX-r.left)/r.width*boardSize(ui.game),y:(event.clientY-r.top)/r.height*boardSize(ui.game)};
 }
 $('#app').addEventListener('pointerdown',event=>{
   if(drag||!canPlay()||event.button!==0||!event.isPrimary) return;
@@ -539,7 +552,7 @@ $('#app').addEventListener('pointerdown',event=>{
   if(!board||!hitPreview(currentMove(),pointerPoint(event))) return;
   event.preventDefault();board.focus({preventScroll:true});
   manualPreview();
-  drag=beginGesture({pointerId:event.pointerId,startPoint:pointerPoint(event),move:currentMove()});
+  drag=beginGesture({pointerId:event.pointerId,startPoint:pointerPoint(event),move:currentMove(),size:boardSize(ui.game)});
   board.setPointerCapture(event.pointerId);
 });
 document.addEventListener('pointermove',event=>{
@@ -549,7 +562,7 @@ document.addEventListener('pointermove',event=>{
 function finishGesture(event,cancelled=false) {
   if(!drag||(event&&event.pointerId!==drag.pointerId)) return;
   const gesture=drag,result=endGesture(gesture,{cancelled});drag=null;
-  setPreview(result.rotate?rotatePreview(result.move,gesture.pivot):result.move);
+  setPreview(result.rotate?rotatePreview(result.move,gesture.pivot,gesture.size):result.move);
   suppressClickUntil=Date.now()+350;render();
 }
 // Activate stationary touch controls once, without relying on a compatibility click
@@ -600,9 +613,9 @@ document.addEventListener('keydown',event=>{
   else if(key==='escape') {resetSelection();render();}
   else if(key.startsWith('arrow')&&ui.selected) {
     manualPreview();
-    ui.cursor??={x:CORNERS[ui.game.turn][0],y:CORNERS[ui.game.turn][1]};
+    ui.cursor??={x:boardCorners(ui.game)[ui.game.turn][0],y:boardCorners(ui.game)[ui.game.turn][1]};
     if(key==='arrowleft') ui.cursor.x--;if(key==='arrowright') ui.cursor.x++;if(key==='arrowup') ui.cursor.y--;if(key==='arrowdown') ui.cursor.y++;
-    ui.cursor=clampOrigin(ui.selected,ui.orientation,ui.cursor);updatePreview();
+    ui.cursor=clampOrigin(ui.selected,ui.orientation,ui.cursor,boardSize(ui.game));updatePreview();
   }
 });
 compactGame.addEventListener('change',()=>{if(drag) finishGesture(null,true);ui.piecesOpen=false;render();});

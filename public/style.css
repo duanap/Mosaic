@@ -68,6 +68,29 @@
 .setup-form .inline-field {margin:0; gap:12px}
 .setup-form .local-seats {margin:0}
 .setup-form input,.setup-form select {max-width:100%}
+.setup-form .setup-input-row,.setup-option-row {display:grid; grid-template-columns:80px minmax(0,1fr); align-items:center; gap:12px; margin:0}
+.field-label {font-size:12px; font-weight:500; color:var(--muted); white-space:nowrap; line-height:1.5}
+.setup-form .setup-input-row input {min-width:0; width:100%; margin:0; min-height:44px}
+.choice-options {display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; min-width:0}
+.setup-form .choice-card {display:flex; flex-direction:row; align-items:center; gap:8px; min-width:0; min-height:46px; padding:10px; border:1px solid var(--line); border-radius:10px; background:var(--surface-soft); color:var(--ink); font-size:12px; cursor:pointer; line-height:1.45}
+.setup-form .choice-card input {flex:none; width:15px; height:15px; padding:0; margin:0; accent-color:var(--accent); box-shadow:none; cursor:inherit}
+.choice-card>span {display:grid; min-width:0; gap:3px}
+.choice-card small {color:var(--muted); font-size:10px; line-height:1.5}
+.setup-form .choice-card:has(input:checked) {border-color:var(--accent); background:var(--accent-soft); color:var(--accent)}
+.choice-card:has(input:focus-visible) {outline:2px solid var(--accent); outline-offset:3px}
+.choice-card:has(input:disabled) {cursor:default}
+#turn-seconds {grid-template-columns:repeat(4,minmax(0,1fr))}
+.setup-form .local-seats {padding:14px; border-radius:12px; gap:12px}
+.seat-config {display:grid; grid-template-columns:minmax(100px,1fr) minmax(0,1.5fr); align-items:center; gap:10px}
+.seat-config>span {display:flex; align-items:center; gap:5px; flex-wrap:wrap; font-size:12px}
+.setup-form .seat-options .choice-card {min-height:40px; padding:8px; font-size:11px}
+@media(max-width:480px) {
+ .setup-form .setup-input-row,.setup-option-row {grid-template-columns:64px minmax(0,1fr); gap:10px}
+ #turn-seconds {grid-template-columns:repeat(2,minmax(0,1fr))}
+ .setup-form .choice-card {padding:9px 7px; gap:6px; font-size:11px}
+ .seat-config {grid-template-columns:76px minmax(0,1fr); gap:8px}
+ .seat-config>span {font-size:11px}
+}
 .menu-error {font-size:12px; color:var(--danger); line-height:1.7}
 .menu-error:empty {display:none}
 .room-menu .lobby-intro {margin-bottom:18px}

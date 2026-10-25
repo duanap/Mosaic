@@ -72,3 +72,19 @@ test('general and room-creation request limits are enforced',async t=>{
   assert.equal((await request('/api/rooms',{name:'B',players:2})).status,429);
   await request('/api/health');assert.equal((await request('/api/health')).status,429);
 });
+
+test('14x14 room size survives HTTP snapshots, moves, replay and rematches',async t=>{
+  const {app,request}=await run(t);
+  for(const body of [{name:'A',players:3,boardSize:14},{name:'A',players:2,boardSize:16}]) assert.equal((await request('/api/rooms',body)).status,400);
+  const a=(await request('/api/rooms',{name:'A',players:2,boardSize:14})).body,code=a.room.code;
+  const b=(await request(`/api/rooms/${code}/join`,{name:'B'})).body;
+  for(const p of [a,b]) app.store.connect(code,p.token,()=>{});
+  let state=(await request(`/api/rooms/${code}/commands`,{type:'start'},a.token)).body;
+  assert.equal(state.boardSize,14);assert.equal(state.game.board.length,196);
+  state=(await request(`/api/rooms/${code}/commands`,{type:'move',round:state.round,revision:0,move:findMove(state.game)},a.token)).body;
+  const record=(await request(`/api/rooms/${code}/replay`,undefined,a.token)).body;
+  assert.equal(record.boardSize,14);
+  await request(`/api/rooms/${code}/commands`,{type:'resign',round:state.round,revision:state.game.revision},b.token);
+  const waiting=(await request(`/api/rooms/${code}/commands`,{type:'rematch'},a.token)).body;assert.equal(waiting.boardSize,14);
+  state=(await request(`/api/rooms/${code}/commands`,{type:'start'},a.token)).body;assert.equal(state.game.boardSize,14);
+});

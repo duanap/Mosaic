@@ -8,6 +8,8 @@ Coverage includes piece inventory/area, all transforms, exhaustive search oracle
 
 ## Direct browser suites
 
+`tests/board-size.test.mjs` covers 14×14 inventory/scoring, exhaustive search against a separate all-position oracle, bot termination, legacy replay sizing and full-shape transform/drag bounds. `tests/browser_duo14.mjs` covers aligned desktop/portrait radio forms, random nicknames, keyboard option focus, four-color local play, touch/landscape geometry, undo/restore/export/import/rematch, real SSE recovery and online bots at size 14. Setup controls are native radios rather than selects.
+
 Use an existing Node Playwright package and Chromium/Edge installation. If normally resolvable, run `npm run test:browser`. For an external installation on Windows:
 
 ```powershell

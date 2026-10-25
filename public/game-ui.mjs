@@ -21,8 +21,8 @@ export function previewOutline(cells) {
 }
 
 /** Position adjacent to the piece, flipping above it near the board's lower edge. */
-export function pieceActionsPosition(move,board,toolbar) {
-  const cells=transform(move.piece,move.orientation),scaleX=board.width/20,scaleY=board.height/20;
+export function pieceActionsPosition(move,board,toolbar,size=20) {
+  const cells=transform(move.piece,move.orientation),scaleX=board.width/size,scaleY=board.height/size;
   const left=board.left+move.x*scaleX,top=board.top+move.y*scaleY;
   const right=left+(Math.max(...cells.map(c=>c[0]))+1)*scaleX,bottom=top+(Math.max(...cells.map(c=>c[1]))+1)*scaleY;
   const minX=board.left+4,maxX=Math.max(minX,board.left+board.width-toolbar.width-4);
@@ -46,7 +46,7 @@ export function selectionMarkup(piece,orientation,color) {
 }
 
 let observer,observedFrame;
-/** Fits actual available width AND height without changing the SVG's 600-unit coordinates. */
+/** Fit available width and height while retaining the board's cell coordinates. */
 export function fitGameBoard(onFit=()=>{}) {
   const frame=document.querySelector('.game-shell-v2 .board-frame'),board=frame?.querySelector('#board');
   if(frame&&frame===observedFrame) {onFit();return;}

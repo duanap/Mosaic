@@ -8,7 +8,8 @@ export function* enumerateMoves(game,color,preferredPiece,{SIZE,CORNERS,variants
     if(at(x,y)!==-1||edges.some(([dx,dy])=>at(x+dx,y+dy)===color)) continue;
     if(diagonals.some(([dx,dy])=>at(x+dx,y+dy)===color)) anchors.push([x,y]);
   }
-  anchors.sort((a,b)=>(Math.abs(a[0]-9.5)+Math.abs(a[1]-9.5))-(Math.abs(b[0]-9.5)+Math.abs(b[1]-9.5)));
+  const center=(SIZE-1)/2;
+  anchors.sort((a,b)=>(Math.abs(a[0]-center)+Math.abs(a[1]-center))-(Math.abs(b[0]-center)+Math.abs(b[1]-center)));
   const ids=game.remaining[color].filter(id=>!preferredPiece||id===preferredPiece).slice().sort((a,b)=>pieceSize(b)-pieceSize(a));
   for(const piece of ids) for(const {orientation,cells} of variants(piece)) {
     const checked=new Set();
