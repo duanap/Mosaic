@@ -80,7 +80,7 @@ test('14x14 room size survives HTTP snapshots, moves, replay and rematches',asyn
   const b=(await request(`/api/rooms/${code}/join`,{name:'B'})).body;
   for(const p of [a,b]) app.store.connect(code,p.token,()=>{});
   let state=(await request(`/api/rooms/${code}/commands`,{type:'start'},a.token)).body;
-  assert.equal(state.boardSize,14);assert.equal(state.game.board.length,196);
+  assert.equal(state.boardSize,14);assert.equal(state.game.board.length,196);assert.equal(state.mode,'duel');assert.equal(state.game.remaining.length,2);
   state=(await request(`/api/rooms/${code}/commands`,{type:'move',round:state.round,revision:0,move:findMove(state.game)},a.token)).body;
   const record=(await request(`/api/rooms/${code}/replay`,undefined,a.token)).body;
   assert.equal(record.boardSize,14);

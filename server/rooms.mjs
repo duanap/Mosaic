@@ -41,7 +41,8 @@ export class RoomStore {
     if(this.rooms.size>=this.maxRooms) fail('SERVER_FULL',503);
     displayName(name);
     if(![2,3,4].includes(players)||!['simple','bonus'].includes(scoring)||![30,60,90,120].includes(turnSeconds)||![14,20].includes(boardSize)||boardSize===14&&players!==2) fail('INVALID_OPTIONS');
-    try {mode=normalizeMode(players,mode);} catch {fail('INVALID_OPTIONS');}
+    try {mode=normalizeMode(players,mode??(boardSize===14?'duel':undefined));} catch {fail('INVALID_OPTIONS');}
+    if(mode==='duel'&&boardSize!==14) fail('INVALID_OPTIONS');
     let code;do {code=String(randomInt(1000000)).padStart(6,'0');} while(this.rooms.has(code));
     const room={code,instance:randomBytes(8).toString('hex'),configGeneration:0,botEpoch:0,botJob:null,capacity:players,boardSize,mode,scoring,turnSeconds,host:0,players:Array(players).fill(null),phase:'waiting',
       game:null,round:0,version:0,deadline:null,createdAt:this.now(),lastHuman:this.now(),endedAt:null};
