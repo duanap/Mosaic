@@ -4,14 +4,14 @@ All HTTP API responses are JSON except the event stream. Errors are `{ "error": 
 
 Room codes are strings containing exactly six ASCII digits (`000000`–`999999`), generated with cryptographic randomness and retried on active-room collisions. Preserve leading zeros in URLs, snapshots and saved sessions; mobile joining uses a numeric keyboard. Alphanumeric codes and malformed invitation links are no longer accepted. Deploy client and server together; the service restart discards previous in-memory rooms as usual.
 
-Room creation additionally accepts `boardSize: 20 | 14` (default 20). Size 14 requires `players: 2` / `mode: duo`; all four colors retain their full 21-piece inventory. Waiting snapshots and active game data include `boardSize`, preserved for rematches and bot jobs. V2 replay exports include `boardSize`; V1 and older V2 records without that field remain 20×20. Frontend selection, preview coordinates, exhaustive move search and worker evaluation use this size. Publish shared rules, browser modules and server together.
+Room creation accepts `boardSize: 20 | 14` (default 20). Two-player size 20 uses `mode: duo` with two colors per person; size 14 defaults to `mode: duel` with one color per person, blue/yellow starting at opposite corners. Every color retains 21 pieces. Explicit `duel` requires two players and size 14. Snapshots/rematches/replays retain size and mode. Old V1/V2 records without size default to 20; older explicit `duo`/14 records remain readable with four colors. Publish shared rules, browser modules and server together.
 
 ## Routes
 
 | Method | Path | Authentication | Result |
 | --- | --- | --- | --- |
 | GET | /api/health | none | Health and application version |
-| POST | /api/rooms | none | Create with name, players (2/3/4), mode (duo/trio/classic/teams), scoring (simple/bonus), turnSeconds (30/60/90/120) |
+| POST | /api/rooms | none | Create with name, players (2/3/4), mode (duo/duel/trio/classic/teams), scoring (simple/bonus), turnSeconds (30/60/90/120) |
 | POST | /api/rooms/:code/join | none | Join with name |
 | GET | /api/rooms/:code | Bearer | Current personalized snapshot |
 | GET | /api/rooms/:code/events | Bearer | Authenticated fetch/SSE stream |
@@ -36,7 +36,7 @@ On HTTPS/localhost, Web Locks protect automatic reconnection from taking over a 
 
 Move/resign require the exact game revision AND room round number. The revision increments for successful moves or resignations. A separate monotonic room `version` orders snapshots, including presence changes; clients ignore older snapshots. A new round increments `round`, preventing an old opening command from replaying in a rematch.
 
-Modes must match seat count: duo=2, trio=3, classic=4, teams=4. Omitted mode defaults to the legacy count-based mode. Teams are seats [0,2] versus [1,3]; each seat still owns one color. Snapshots include `mode` and player `kind: human | bot`; bots additionally have `level: standard` and connected=false. Bot seats do not require connection to start and cannot be authorized or promoted to host. Seat recovery remains human-only.
+Modes must match seat count: duo=2, duel=2 (14 only), trio=3, classic=4, teams=4. Omitted mode defaults to the legacy count-based mode. Teams are seats [0,2] versus [1,3]; each seat still owns one color. Snapshots include `mode` and player `kind: human | bot`; bots additionally have `level: standard` and connected=false. Bot seats do not require connection to start and cannot be authorized or promoted to host. Seat recovery remains human-only.
 
 Replay exports are version 2, with `mode`, sanitized `seats` (kind/level only), and move `source: human | bot | timeout`; `automatic` is source != human. No tokens or listeners are serialized. The reader accepts v1 records, mapping old automatic moves to timeout and choosing the legacy mode by player count. History is validated by replaying legal intents, including controller and source/seat compatibility.
 

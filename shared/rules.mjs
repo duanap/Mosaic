@@ -5,8 +5,9 @@ export const SIZE = 20;
 export const COLORS = ['blue', 'yellow', 'red', 'green'];
 export const CORNERS = [[0,0],[19,0],[19,19],[0,19]];
 const smallCorners=[[0,0],[13,0],[13,13],[0,13]];
+const duelCorners=[[0,0],[13,13]];
 export const boardSize=game=>game.boardSize??SIZE;
-export const boardCorners=game=>boardSize(game)===14?smallCorners:CORNERS;
+export const boardCorners=game=>game.mode==='duel'?duelCorners:boardSize(game)===14?smallCorners:CORNERS;
 export const PIECES = [
   ['I1',[[0,0]]], ['I2',[[0,0],[1,0]]],
   ['I3',[[0,0],[1,0],[2,0]]], ['L3',[[0,0],[0,1],[1,1]]],
@@ -58,12 +59,15 @@ export function variants(id) {
   return unique.get(id);
 }
 export const pieceSize = id => byId.get(id)?.cells.length ?? 0;
-export const ownedColors = (players,seat) => players===2 ? [seat,seat+2] : [seat];
+export const ownedColors = (players,seat,mode) => players===2&&mode!=='duel' ? [seat,seat+2] : [seat];
 
 export function newGame(players=4,scoring='bonus',{mode,seats,boardSize:size=SIZE}={}) {
   if(![2,3,4].includes(players) || !['simple','bonus'].includes(scoring)||![14,20].includes(size)||size===14&&players!==2) throw Error('INVALID_OPTIONS');
-  return {players,scoring,boardSize:size,mode:normalizeMode(players,mode),seats:normalizeSeats(players,seats),board:Array(size*size).fill(-1),remaining:Array.from({length:4},()=>PIECES.map(p=>p.id)),
-    started:[false,false,false,false],stopped:[null,null,null,null],lastPiece:[null,null,null,null],
+  mode=normalizeMode(players,mode??(size===14?'duel':undefined));
+  if(mode==='duel'&&size!==14) throw Error('INVALID_OPTIONS');
+  const colors=mode==='duel'?2:4;
+  return {players,scoring,boardSize:size,mode,seats:normalizeSeats(players,seats),board:Array(size*size).fill(-1),remaining:Array.from({length:colors},()=>PIECES.map(p=>p.id)),
+    started:Array(colors).fill(false),stopped:Array(colors).fill(null),lastPiece:Array(colors).fill(null),
     resigned:Array(players).fill(false),turn:0,neutralCursor:0,status:'playing',revision:0,history:[]};
 }
 export function controller(game,color=game.turn) {
@@ -79,7 +83,7 @@ export function controller(game,color=game.turn) {
 export function validateMove(game,move,color=game.turn) {
   const fail=code=>({ok:false,code});
   if(game.status!=='playing') return fail('GAME_FINISHED');
-  if(!Number.isInteger(color) || color<0 || color>3 || game.stopped[color]) return fail('COLOR_STOPPED');
+  if(!Number.isInteger(color) || color<0 || color>=game.remaining.length || game.stopped[color]) return fail('COLOR_STOPPED');
   if(!move || typeof move!=='object' || Array.isArray(move)) return fail('INVALID_MOVE');
   const {piece,orientation,x,y}=move;
   if(!byId.has(piece) || !game.remaining[color].includes(piece)) return fail('PIECE_UNAVAILABLE');
@@ -104,14 +108,14 @@ export function findMove(game,color=game.turn,preferredPiece=null) {return legal
 function settle(game) {
   if(game.mode==='teams'&&[0,1].some(team=>[team,team+2].every(s=>game.resigned[s]))) {game.status='finished';return;}
   if(game.resigned.filter(v=>!v).length<=1) {game.status='finished';return;}
-  for(let i=0;i<4;i++) {
+  for(let i=0;i<game.remaining.length;i++) {
     const color=game.turn;
     if(!game.stopped[color]) {
       if(game.remaining[color].length===0) game.stopped[color]='complete';
       else if(!findMove(game,color)) game.stopped[color]='blocked';
     }
     if(!game.stopped[color]) return;
-    game.turn=(game.turn+1)%4;
+    game.turn=(game.turn+1)%game.remaining.length;
   }
   game.status='finished';
 }
@@ -127,12 +131,12 @@ export function applyMove(game,move,{automatic=false,source=automatic?'timeout':
   game.revision++;
   if(color===3 && game.players===3) game.neutralCursor=(player+1)%3;
   if(game.remaining[color].length===0) game.stopped[color]='complete';
-  game.turn=(color+1)%4;settle(game);return game;
+  game.turn=(color+1)%game.remaining.length;settle(game);return game;
 }
 export function resign(game,player) {
   if(game.status!=='playing'||!Number.isInteger(player)||player<0||player>=game.players||game.resigned[player]) throw Error('INVALID_RESIGN');
   game.resigned[player]=true;
-  for(const c of ownedColors(game.players,player)) game.stopped[c]='resigned';
+  for(const c of ownedColors(game.players,player,game.mode)) game.stopped[c]='resigned';
   game.history.push({type:'resign',player});game.revision++;settle(game);return game;
 }
 function individualScores(game) {
@@ -141,7 +145,7 @@ function individualScores(game) {
     return {color:c,remaining,placed:89-remaining,score:remaining?-remaining:(game.scoring==='bonus'?15+(game.lastPiece[c]==='I1'?5:0):0)};
   });
   const rows=Array.from({length:game.players},(_,player)=>{
-    const colors=ownedColors(game.players,player),parts=colors.map(c=>colorScores[c]);
+    const colors=ownedColors(game.players,player,game.mode),parts=colors.map(c=>colorScores[c]);
     return {player,colors,score:parts.reduce((n,v)=>n+v.score,0),remaining:parts.reduce((n,v)=>n+v.remaining,0),
       placed:parts.reduce((n,v)=>n+v.placed,0),resigned:game.resigned[player],winner:false};
   });

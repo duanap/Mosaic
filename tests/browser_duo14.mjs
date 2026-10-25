@@ -31,6 +31,14 @@ test('setup aligns names and option fields, uses visible radios and supplies a r
       return {dy:Math.abs((input.top+input.height/2)-(label.top+label.height/2)),dx:options.map(x=>Math.abs(x-input.left)),overflow:document.querySelector('#modal').scrollWidth>document.querySelector('#modal').clientWidth+1};
     });
     assert.ok(alignment.dy<1);assert.ok(alignment.dx.every(dx=>dx<1));assert.equal(alignment.overflow,false);
+    const typography=await page.evaluate(()=>{
+      const modal=document.querySelector('#modal'),bounds=modal.getBoundingClientRect(),title=document.querySelector('#modal-title'),heading=title.getBoundingClientRect();
+      const button=document.querySelector('#create-room'),buttonRect=button.getBoundingClientRect(),text=[...button.childNodes].find(node=>node.nodeType===3&&node.textContent.trim()),range=document.createRange();range.selectNodeContents(text);const textRect=range.getBoundingClientRect();
+      const style=selector=>getComputedStyle(document.querySelector(selector));
+      return {titleOffset:Math.abs(heading.left+heading.width/2-(bounds.left+modal.clientLeft+modal.clientWidth/2)),buttonOffset:Math.abs(textRect.left+textRect.width/2-buttonRect.left-buttonRect.width/2),
+        title:style('#modal-title').fontSize,body:style('.setup-intro').fontSize,caption:style('.choice-card small').fontSize,description:style('.setup-intro').textAlign,choice:style('.choice-card>span').textAlign};
+    });
+    assert.ok(typography.titleOffset<1);assert.ok(typography.buttonOffset<1);assert.equal(typography.title,'24px');assert.equal(typography.body,'14px');assert.equal(typography.caption,'12px');assert.equal(typography.description,'center');assert.equal(typography.choice,'center');
     assert.equal(await page.locator('#setup-form select').count(),0);assert.equal(await page.locator('#player-name').inputValue(),'同排昵称');
     if(width===1440||width===390) await page.locator('#modal').screenshot({path:`artifacts/browser/duo14/setup-light-${width}.png`});
   }
@@ -40,11 +48,11 @@ test('setup aligns names and option fields, uses visible radios and supplies a r
   assert.match(await page.locator('.lobby-aside').innerText(),/14\s*×\s*14/);
 }));
 
-test('14x14 local play supports all four colors, hints, bounds, undo, restore, rematch and replay',()=>fixture(async({browser,base})=>{
+test('14x14 local play supports alternating single colors, hints, bounds, undo, restore, rematch and replay',()=>fixture(async({browser,base})=>{
   const page=await browser.newPage({viewport:{width:1366,height:768}}),errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.goto(base);await select14(page,'local');await page.locator('#local-start').click();
   assert.equal(await page.locator('#board').getAttribute('viewBox'),'0 0 420 420');assert.equal(await page.locator('[data-piece]').count(),21);
-  assert.equal(await page.locator('#board .start-mark').count(),4);
+  assert.equal(await page.locator('#board .start-mark').count(),2);
   await page.locator('[data-piece="F5"]').click();await page.keyboard.press('r');await page.keyboard.press('f');
   for(let n=0;n<18;n++) {await page.keyboard.press('ArrowRight');await page.keyboard.press('ArrowDown');}
   assert.ok(await page.locator('#preview rect').evaluateAll(nodes=>nodes.every(n=>Number(n.getAttribute('x'))<420&&Number(n.getAttribute('y'))<420)));
@@ -54,9 +62,11 @@ test('14x14 local play supports all four colors, hints, bounds, undo, restore, r
     await page.locator('#confirm-move').click();assert.equal(await page.locator('#move-number').innerText(),String(n));
   }
   let record=await page.evaluate(()=>JSON.parse(localStorage.getItem('djq-local-v1')));
-  assert.equal(record.boardSize,14);assert.deepEqual(record.actions.map(a=>a.color),[0,1,2,3]);
+  assert.equal(record.boardSize,14);assert.deepEqual(record.actions.map(a=>a.color),[0,1,0,1]);
   await page.screenshot({path:'artifacts/browser/duo14/game-desktop.png',fullPage:true});
   await page.reload();await page.locator('#resume-local').click();assert.equal(await page.locator('#board').getAttribute('data-size'),'14');
+  await page.locator('#home-button').click();await openSetup(page,'local');assert.equal(await page.locator('#mode-2').getAttribute('aria-pressed'),'true');assert.equal(await radio(page,'board-size',14).isChecked(),true);
+  await page.keyboard.press('Escape');await page.locator('#resume-local').click();
   await page.locator('#undo').click();assert.equal(await page.locator('#move-number').innerText(),'3');
   page.on('dialog',dialog=>dialog.accept());await page.locator('#resign').click();await page.locator('#result-content').waitFor();await page.locator('#close-modal').click();
   const downloaded=page.waitForEvent('download');await page.locator('#export-replay').click();const download=await downloaded;

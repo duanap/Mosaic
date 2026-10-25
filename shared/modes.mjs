@@ -1,6 +1,6 @@
 export function normalizeMode(players,mode) {
   const value=mode??({2:'duo',3:'trio',4:'classic'})[players];
-  if(![2,3,4].includes(players)||!['duo','trio','classic','teams'].includes(value)||!({duo:players===2,trio:players===3,classic:players===4,teams:players===4})[value]) throw Error('INVALID_OPTIONS');
+  if(![2,3,4].includes(players)||!['duo','duel','trio','classic','teams'].includes(value)||!({duo:players===2,duel:players===2,trio:players===3,classic:players===4,teams:players===4})[value]) throw Error('INVALID_OPTIONS');
   return value;
 }
 export const teamOf=(mode,seat)=>mode==='teams'?seat%2:null;

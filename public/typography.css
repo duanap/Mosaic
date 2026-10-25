@@ -1,0 +1,64 @@
+/* Shared hierarchy and centered composition, after home and match component styles. */
+:root {--type-display:clamp(36px,4vw,52px); --type-title:24px; --type-section:20px; --type-emphasis:16px; --type-body:14px; --type-caption:12px; --type-micro:10px}
+body {font-size:var(--type-body); line-height:1.6}
+button,.button,.text-button,.tool-button,.github-link {text-align:center}
+.button,.text-button,.tool-button,.github-link {justify-content:center}
+.button {position:relative; font-size:var(--type-body); padding-inline:38px; line-height:1.5}
+.button .icon {position:absolute; right:12px; top:50%; transform:translateY(-50%); margin:0}
+.button.wide {justify-content:center; text-align:center}
+h1,h2,h3 {text-align:center; line-height:1.4}
+.hero h1 {font-size:var(--type-display); text-align:center}
+.hero-copy .lead {font-size:var(--type-body); text-align:center; margin-inline:auto}
+.hero-copy .quick-rules {justify-content:center}
+.section-heading {align-items:center; justify-content:center; text-align:center}
+.section-heading h2,.recovery-section h2,.room-menu .lobby-aside h2,.result-summary h3 {font-size:var(--type-section)}
+.entry-card {align-items:flex-start; justify-content:center; text-align:center; min-height:300px; padding:24px}
+.entry-copy {width:100%; margin-top:0; align-items:center; text-align:center; gap:10px}
+.entry-copy>strong {font-size:var(--type-title); line-height:1.4}
+.entry-copy>span {font-size:var(--type-body); max-width:260px; text-align:center; line-height:1.7}
+.entry-card .entry-art {left:50%; right:auto; bottom:-6px; width:170px; max-width:none; transform:translateX(-50%)}
+.entry-card .entry-arrow {left:auto; right:18px; bottom:18px}
+@media(hover:hover) and (pointer:fine) {.entry-card:hover:not(:disabled) .entry-art {transform:translateX(-50%) translateY(-3px) rotate(-2deg)}}
+@media(prefers-reduced-motion:reduce) {.entry-card:hover:not(:disabled) .entry-art {transform:translateX(-50%)}}
+#modal {font-size:var(--type-body)}
+.modal-heading {position:relative; display:grid; grid-template-columns:44px minmax(0,1fr) 44px; align-items:center; gap:8px; min-height:44px; margin-bottom:20px}
+.modal-heading>h2,.modal-heading>div {grid-column:2; grid-row:1; min-width:0; text-align:center}
+.modal-heading h2 {font-size:var(--type-title); font-weight:650; line-height:1.4; margin:0; text-align:center}
+.modal-heading>#close-modal {grid-column:3; grid-row:1; justify-self:end}
+.modal-heading .eyebrow {font-size:var(--type-caption); text-align:center; margin-bottom:4px}
+.setup-intro,.room-menu .lobby-intro p,.room-lifecycle,.rules-content p,.result-summary>p,.recovery-section p,.active-room p {font-size:var(--type-body); font-weight:400; line-height:1.75; text-align:center}
+.room-menu .lobby-aside>p,.room-menu .lobby-buttons .fine,.menu-error {font-size:var(--type-body); line-height:1.75; text-align:center}
+.rules-content>section {display:grid; grid-template-columns:minmax(0,1fr); gap:6px; margin-bottom:20px; text-align:center}
+.rules-content>section>b {font-size:var(--type-caption); padding:0}
+.rules-content>.fine {font-size:var(--type-caption)}
+.setup-form .field-label {font-size:var(--type-body); font-weight:500; text-align:center}
+.setup-form .setup-input-row input {font-size:var(--type-body); text-align:center}
+.setup-modes button {align-items:center; justify-content:center; text-align:center}
+.setup-modes strong {font-size:var(--type-title); line-height:1.25}
+.setup-modes span {font-size:var(--type-caption)}
+.setup-form .choice-card,.setup-form .seat-options .choice-card {position:relative; display:flex; align-items:center; justify-content:center; padding:15px 8px 12px; min-height:52px; font-size:var(--type-body); line-height:1.5; text-align:center}
+.setup-form .choice-card input {position:absolute; inset:0; width:100%; height:100%; margin:0; padding:0; opacity:0; cursor:inherit}
+.setup-form .choice-card>span {width:100%; justify-items:center; text-align:center; pointer-events:none}
+.setup-form .choice-card small {font-size:var(--type-caption); text-align:center; line-height:1.5}
+.setup-form .choice-card:has(input:checked)::after {content:'✓'; position:absolute; right:5px; top:1px; font-size:var(--type-micro); pointer-events:none}
+.seat-config>span {font-size:var(--type-body)}
+.local-seats legend {font-size:var(--type-caption); text-align:center; margin-inline:auto}
+.room-menu .lobby-buttons {justify-content:center}
+.room-menu .lobby-code {justify-content:space-between; text-align:center}
+.room-menu .lobby-code .button,.recovery-actions .button {font-size:var(--type-body); text-align:center}
+.recovery-actions {justify-content:center}
+.active-room>div {text-align:center}
+.site-header .brand strong,.match-header .brand strong {font-size:var(--type-section)}
+.match-context strong {font-size:var(--type-section)}
+.match-context>span,.match-header .text-button,.game-shell-v2 .auxiliary-actions .text-button {font-size:var(--type-caption)}
+.players-heading {position:relative; justify-content:center; min-height:24px; padding-inline:42px}
+.players-heading h2 {font-size:var(--type-emphasis); text-align:center}
+.players-heading>span {position:absolute; right:8px; font-size:var(--type-caption)}
+.game-shell-v2 .player-ident strong {font-size:var(--type-emphasis)}
+.game-shell-v2 .player-state,.game-shell-v2 .player-affiliation,.game-shell-v2 .player-colors>span {font-size:var(--type-caption)}
+.game-shell-v2 .player-score strong {font-size:var(--type-title)}
+.game-shell-v2 .transform-tools .tool-button,.game-shell-v2 .commit-actions .button {font-size:var(--type-body)}
+.result-summary>span,.result-scores li,#modal-log .move-log li {font-size:var(--type-body)}
+.selected-piece-meta strong {font-size:var(--type-emphasis)}
+#hint-sequence,.game-shell-v2 #game-shortcuts,#modal-log .move-log small {font-size:var(--type-caption)}
+.piece>span {font-size:var(--type-micro)}

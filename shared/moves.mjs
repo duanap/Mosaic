@@ -1,6 +1,6 @@
 /** Lazy exhaustive search. Rules are supplied to avoid circular imports. */
 export function* enumerateMoves(game,color,preferredPiece,{SIZE,CORNERS,variants,validateMove,pieceSize}) {
-  if(game.status!=='playing'||game.stopped[color]) return;
+  if(game.status!=='playing'||!Number.isInteger(color)||color<0||color>=game.remaining.length||game.stopped[color]) return;
   const edges=[[1,0],[-1,0],[0,1],[0,-1]],diagonals=[[1,1],[1,-1],[-1,1],[-1,-1]];
   const at=(x,y)=>x>=0&&x<SIZE&&y>=0&&y<SIZE?game.board[y*SIZE+x]:-2,anchors=[];
   if(!game.started[color]) anchors.push(CORNERS[color]);
