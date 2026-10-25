@@ -5,6 +5,7 @@ import { t } from '/i18n.mjs';
 import { clampOrigin, hitPreview, rotatePreview, flipPreview, initialPreview, beginGesture, moveGesture, endGesture } from '/placement.mjs';
 import { AnalysisClient } from '/analysis-client.mjs';
 import { pieceSVG, selectionMarkup, fitGameBoard, previewOutline, pieceActionsPosition, renderRegion } from '/game-ui.mjs';
+import { rulesContent } from '/rules-ui.mjs';
 
 const $=selector=>document.querySelector(selector);
 const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -372,7 +373,7 @@ async function commitMove() {
   else {ui.pending=true;render();try{await network.command({type:'move',round:ui.room.round,revision:ui.game.revision,move});}finally{ui.pending=false;render();}}
 }
 function showRules() {
-  const dialog=$('#modal');dialog.dataset.content='rules';dialog.innerHTML=`<div class="modal-heading"><div><p class="eyebrow">HOW TO PLAY</p><h2 id="modal-title">${t('rules')}</h2></div><button id="close-modal" class="icon-button" aria-label="${t('close')}">${icon('close')}</button></div><div class="rules-content">${['ruleFirst','ruleConnect','ruleModes','ruleEnd','ruleScore','ruleTimer'].map((key,i)=>`<section><b>0${i+1}</b><p>${t(key)}</p></section>`).join('')}<p class="fine">${t('shortcut')}</p></div>`;dialog.showModal();
+  const dialog=$('#modal');dialog.dataset.content='rules';dialog.innerHTML=`<div class="modal-heading"><h2 id="modal-title">${t('rules')}</h2><button id="close-modal" class="icon-button" aria-label="${t('close')}">${icon('close')}</button></div>${rulesContent()}`;dialog.showModal();dialog.querySelector('.rules-content').scrollTop=0;
 }
 function showLog() {
   if(!ui.game) return;

@@ -28,9 +28,50 @@ h1,h2,h3 {text-align:center; line-height:1.4}
 .modal-heading .eyebrow {font-size:var(--type-caption); text-align:center; margin-bottom:4px}
 .setup-intro,.room-menu .lobby-intro p,.room-lifecycle,.rules-content p,.result-summary>p,.recovery-section p,.active-room p {font-size:var(--type-body); font-weight:400; line-height:1.75; text-align:center}
 .room-menu .lobby-aside>p,.room-menu .lobby-buttons .fine,.menu-error {font-size:var(--type-body); line-height:1.75; text-align:center}
-.rules-content>section {display:grid; grid-template-columns:minmax(0,1fr); gap:6px; margin-bottom:20px; text-align:center}
-.rules-content>section>b {font-size:var(--type-caption); padding:0}
-.rules-content>.fine {font-size:var(--type-caption)}
+#modal[data-content="rules"] {width:min(760px,calc(100vw - 24px)); max-height:min(900px,calc(100dvh - 24px)); padding:0; overflow:hidden}
+#modal[data-content="rules"][open] {display:flex; flex-direction:column}
+#modal[data-content="rules"] .modal-heading {flex:none; padding:18px 24px; margin:0; border-bottom:1px solid var(--line); background:var(--surface)}
+#modal[data-content="rules"] .rules-content {flex:1 1 auto; min-width:0; min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; padding:24px 28px; display:grid; gap:28px; text-align:left; overflow-wrap:anywhere}
+#modal[data-content="rules"] .rules-content>section {display:block; min-width:0; margin:0; text-align:left}
+#modal[data-content="rules"] .rules-content p {margin:0; font-size:var(--type-body); line-height:1.8; text-align:left}
+#modal[data-content="rules"] .rules-content p+p {margin-top:10px}
+#modal[data-content="rules"] .rules-intro p:first-child {font-size:var(--type-emphasis); color:var(--ink); line-height:1.65}
+#modal[data-content="rules"] .rules-intro p+p {margin-top:6px; color:var(--muted)}
+#modal[data-content="rules"] .rules-content h3 {display:flex; align-items:center; gap:10px; margin:0 0 14px; font-size:var(--type-emphasis); font-weight:650; text-align:left}
+.rules-index {display:inline-grid; place-items:center; flex:none; width:28px; height:28px; border-radius:8px; background:var(--accent-soft); color:var(--accent); font-size:var(--type-caption); font-variant-numeric:tabular-nums}
+.rules-content ul,.rules-steps {margin:0; padding-left:21px; font-size:var(--type-body); line-height:1.8}
+.rules-content li+li {margin-top:9px}
+.rules-content li::marker {color:var(--accent); font-weight:600}
+.rules-examples,.rules-mode-grid,.rules-score-grid {display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; min-width:0; margin-top:16px}
+.rules-examples figure {min-width:0; margin:0; padding:14px 10px; border:1px solid var(--line); border-radius:12px; background:var(--surface-soft)}
+.rules-examples svg {width:90px; height:66px; margin:0 auto 10px; max-width:100%; fill:var(--blue)}
+.rules-examples .rules-contact {fill:var(--accent); stroke:var(--accent); stroke-width:3; stroke-linecap:round}
+.rules-examples .rules-invalid .rules-contact {stroke:var(--danger); fill:none}
+.rules-examples figcaption {display:grid; gap:4px; text-align:center; font-size:var(--type-body)}
+.rules-examples figcaption strong {color:var(--accent)}
+.rules-examples .rules-invalid figcaption strong {color:var(--danger)}
+.rules-examples figcaption span {font-size:var(--type-caption); color:var(--muted); line-height:1.6}
+.rules-mode-grid article,.rules-score-grid article {min-width:0; padding:16px; border:1px solid var(--line); border-radius:12px; background:var(--surface-soft)}
+.rules-mode-heading {display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:9px}
+.rules-content h4 {min-width:0; margin:0; font-size:var(--type-body); font-weight:650; line-height:1.6; text-align:left}
+.rules-mode-heading>span {flex:none; padding:2px 6px; border-radius:6px; background:var(--surface); font-size:var(--type-caption); color:var(--muted); white-space:nowrap}
+#modal[data-content="rules"] .rules-mode-grid p,#modal[data-content="rules"] .rules-score-grid p {color:var(--muted)}
+.rules-score-grid h4 {margin-bottom:8px}
+#modal[data-content="rules"] .rules-content .rules-note {padding:10px 14px; margin-top:14px; border-left:3px solid var(--accent); border-radius:0 8px 8px 0; background:var(--accent-soft)}
+#modal[data-content="rules"] .rules-score-grid+p {margin-top:14px}
+.rules-keyboard {padding-top:20px; border-top:1px solid var(--line)}
+.rules-shortcuts {min-width:0}
+.rules-keyboard dl {display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:0}
+.rules-keyboard dl>div {display:flex; align-items:center; gap:10px; min-width:0}
+.rules-keyboard dt,.rules-keyboard dd {margin:0; font-size:var(--type-caption)}
+.rules-keyboard kbd {display:inline-block; min-width:32px; padding:3px 6px; border:1px solid var(--line); border-radius:6px; background:var(--surface-soft); font:inherit; text-align:center; white-space:nowrap}
+@media(max-width:600px) {
+ #modal[data-content="rules"] .modal-heading {padding:14px 18px}
+ #modal[data-content="rules"] .rules-content {padding:20px 18px; gap:24px}
+ .rules-mode-grid,.rules-score-grid {grid-template-columns:minmax(0,1fr)}
+ .rules-mode-grid article,.rules-score-grid article {padding:14px}
+ .rules-keyboard dl {grid-template-columns:repeat(2,minmax(0,1fr))}
+}
 .setup-form .field-label {font-size:var(--type-body); font-weight:500; text-align:center}
 .setup-form .setup-input-row input {font-size:var(--type-body); text-align:center}
 .setup-modes button {align-items:center; justify-content:center; text-align:center}
